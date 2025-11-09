@@ -1,0 +1,24 @@
+---
+title: 'List Webhooks'
+api: 'GET /v1/webhooks'
+description: 'Get all webhooks for your organization'
+---
+
+## Response
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "webhook_abc123",
+      "object": "webhook",
+      "url": "https://yourapp.com/webhooks/outcry",
+      "events": ["video.completed", "video.failed"],
+      "is_active": true,
+      "created_at": 1730634000
+    }
+  ],
+  "has_more": false
+}
+```

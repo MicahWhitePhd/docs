@@ -1,0 +1,92 @@
+---
+title: 'Create Webhook'
+api: 'POST /v1/webhooks'
+description: 'Register a new webhook endpoint'
+---
+
+## Request Body
+
+<ParamField body="url" type="string" required>
+  The URL where webhook events will be sent (must be HTTPS)
+</ParamField>
+
+<ParamField body="events" type="array" required>
+  Array of event types to subscribe to (e.g., `["video.completed", "video.failed"]`)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Optional description of the webhook's purpose
+</ParamField>
+
+## Response
+
+```json
+{
+  "id": "webhook_abc123",
+  "object": "webhook",
+  "url": "https://yourapp.com/webhooks/outcry",
+  "events": ["video.completed", "video.failed"],
+  "secret": "whsec_abc123...",
+  "is_active": true,
+  "created_at": 1730634000
+}
+```
+
+<Warning>
+  **Save the secret!** The webhook secret is only returned once on creation. Store it securely to verify webhook signatures.
+</Warning>
+
+## Example
+
+<CodeGroup>
+
+```typescript TypeScript
+const response = await fetch('https://api.outcryai.com/v1/webhooks', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer oc_live_...',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    url: 'https://yourapp.com/webhooks/outcry',
+    events: ['video.completed', 'video.failed'],
+    description: 'Production video webhooks'
+  })
+});
+
+const webhook = await response.json();
+console.log('Webhook secret:', webhook.secret);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.outcryai.com/v1/webhooks',
+    headers={
+        'Authorization': 'Bearer oc_live_...',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'url': 'https://yourapp.com/webhooks/outcry',
+        'events': ['video.completed', 'video.failed'],
+        'description': 'Production video webhooks'
+    }
+)
+
+webhook = response.json()
+print(f"Webhook secret: {webhook['secret']}")
+```
+
+```bash cURL
+curl -X POST https://api.outcryai.com/v1/webhooks \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourapp.com/webhooks/outcry",
+    "events": ["video.completed", "video.failed"],
+    "description": "Production video webhooks"
+  }'
+```
+
+</CodeGroup>

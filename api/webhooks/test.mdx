@@ -1,0 +1,39 @@
+---
+title: 'Test Webhook'
+api: 'POST /v1/webhooks/{webhook_id}/test'
+description: 'Send a test event to your webhook endpoint'
+---
+
+## Path Parameters
+
+<ParamField path="webhook_id" type="string" required>
+  The ID of the webhook to test
+</ParamField>
+
+## Request Body
+
+<ParamField body="event_type" type="string">
+  The type of test event to send (defaults to `video.completed`)
+</ParamField>
+
+## Response
+
+```json
+{
+  "success": true,
+  "status_code": 200,
+  "response_time_ms": 234,
+  "message": "Test event delivered successfully"
+}
+```
+
+## Use Cases
+
+- Verify webhook endpoint is accessible
+- Test signature verification in your app
+- Debug webhook handling logic
+- Confirm event parsing works correctly
+
+<Tip>
+  Use test events to validate your webhook implementation before going live.
+</Tip>

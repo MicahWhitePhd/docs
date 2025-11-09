@@ -1,0 +1,38 @@
+---
+title: 'Update Webhook'
+api: 'PATCH /v1/webhooks/{webhook_id}'
+description: 'Update webhook configuration'
+---
+
+## Path Parameters
+
+<ParamField path="webhook_id" type="string" required>
+  The ID of the webhook to update
+</ParamField>
+
+## Request Body
+
+<ParamField body="url" type="string">
+  New webhook URL
+</ParamField>
+
+<ParamField body="events" type="array">
+  New event subscriptions
+</ParamField>
+
+<ParamField body="is_active" type="boolean">
+  Enable or disable the webhook
+</ParamField>
+
+## Response
+
+```json
+{
+  "id": "webhook_abc123",
+  "object": "webhook",
+  "url": "https://yourapp.com/webhooks/outcry-new",
+  "events": ["video.completed"],
+  "is_active": true,
+  "updated_at": 1730634100
+}
+```

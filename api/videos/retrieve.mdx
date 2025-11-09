@@ -1,0 +1,447 @@
+# Retrieve Video
+
+Get the current status and details of a video generation job.
+
+```http
+GET /v1/videos/:video_id
+```
+
+## Request
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `video_id` | string | Yes | The video ID returned from create endpoint (e.g., `video_abc123`) |
+
+### Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Bearer oc_live_...` | Yes |
+
+## Response
+
+### Success (200 OK)
+
+Returns the video object with current status:
+
+```json
+{
+  "id": "video_abc123def456",
+  "object": "video",
+  "created": 1730634060,
+  "model": "sora-2",
+  "prompt": "Activists marching for climate justice",
+  "status": "completed",
+  "progress": 100,
+  "seconds": "8",
+  "size": "1280x720",
+  "url": "https://pub-...r2.dev/videos/2025/11/abc123.mp4",
+  "x-cost": {
+    "amount": 2.50,
+    "currency": "USD"
+  },
+  "x-storage-provider": "r2",
+  "x-persisted": true
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique video identifier |
+| `object` | string | Always `"video"` |
+| `created` | integer | Unix timestamp when video was created |
+| `model` | string | Model used: `"sora-2"` or `"sora-2-pro"` |
+| `prompt` | string | Original video prompt |
+| `status` | string | Current status (see statuses below) |
+| `progress` | integer | Progress percentage (0-100) |
+| `seconds` | string | Video duration |
+| `size` | string | Video resolution |
+| `url` | string\|null | Video download URL (null until completed) |
+| `error` | object\|null | Error details if status is `"failed"` |
+| `x-cost` | object | Cost information |
+| `x-storage-provider` | string | Storage location: `"openai"` or `"r2"` |
+| `x-persisted` | boolean | Whether video is persisted to R2 |
+
+### Video Statuses
+
+| Status | Description | Next Action |
+|--------|-------------|-------------|
+| `queued` | Waiting to start generation | Poll again in 5 seconds |
+| `in_progress` | Actively generating | Poll again in 5 seconds |
+| `completed` | Video ready to download | Download from `url` |
+| `failed` | Generation failed | Check `error` field |
+
+## Examples
+
+### Basic Retrieval
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const video = await client.videos.retrieve('video_abc123');
+
+console.log(`Status: ${video.status}`);
+console.log(`Progress: ${video.progress}%`);
+
+if (video.status === 'completed') {
+  console.log(`Video URL: ${video.url}`);
+}
+
+if (video.status === 'failed') {
+  console.error(`Error: ${video.error.message}`);
+}
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+video = client.videos.retrieve("video_abc123")
+
+print(f"Status: {video.status}")
+print(f"Progress: {video.progress}%")
+
+if video.status == 'completed':
+    print(f"Video URL: {video.url}")
+
+if video.status == 'failed':
+    print(f"Error: {video.error['message']}")
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/videos/video_abc123 \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+
+# Response (in progress):
+{
+  "id": "video_abc123",
+  "status": "in_progress",
+  "progress": 45,
+  "url": null
+}
+
+# Response (completed):
+{
+  "id": "video_abc123",
+  "status": "completed",
+  "progress": 100,
+  "url": "https://pub-...r2.dev/videos/2025/11/abc123.mp4"
+}
+```
+
+</CodeGroup>
+
+### Polling with Timeout
+
+```typescript
+async function waitForVideo(
+  videoId: string,
+  timeoutSeconds = 180
+): Promise<Video> {
+  const startTime = Date.now();
+  const timeoutMs = timeoutSeconds * 1000;
+
+  while (true) {
+    // Check timeout
+    if (Date.now() - startTime > timeoutMs) {
+      throw new Error('Video generation timed out');
+    }
+
+    const video = await client.videos.retrieve(videoId);
+
+    console.log(`[${video.id}] Status: ${video.status} (${video.progress}%)`);
+
+    if (video.status === 'completed') {
+      return video;
+    }
+
+    if (video.status === 'failed') {
+      throw new Error(`Video failed: ${video.error.message}`);
+    }
+
+    // Poll every 5 seconds
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+}
+
+const video = await waitForVideo('video_abc123', 180);  // 3 minute timeout
+console.log(`Video ready: ${video.url}`);
+```
+
+### Polling with Progress Callback
+
+```typescript
+async function waitForVideoWithProgress(
+  videoId: string,
+  onProgress: (progress: number) => void
+): Promise<Video> {
+  while (true) {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    const video = await client.videos.retrieve(videoId);
+
+    // Call progress callback
+    onProgress(video.progress);
+
+    if (video.status === 'completed') {
+      return video;
+    }
+
+    if (video.status === 'failed') {
+      throw new Error(`Video failed: ${video.error.message}`);
+    }
+  }
+}
+
+const video = await waitForVideoWithProgress(
+  'video_abc123',
+  (progress) => {
+    console.log(`Progress: ${progress}%`);
+    // Update UI progress bar
+    updateProgressBar(progress);
+  }
+);
+```
+
+## Error Responses
+
+### 404 Not Found - Video Doesn't Exist
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Video not found: video_abc123",
+    "code": "video_not_found"
+  }
+}
+```
+
+**Possible causes:**
+- Invalid video ID
+- Video belongs to different organization
+- Video was deleted
+
+**Solution:** Verify the video ID is correct and belongs to your account.
+
+### 410 Gone - Video Expired
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Video has expired (>1 hour old, not persisted)",
+    "code": "video_expired"
+  }
+}
+```
+
+**Cause:** Video is >1 hour old and was not persisted to R2 storage.
+
+**Solution:**
+- Videos are automatically persisted after 45 minutes
+- This error only occurs for very old videos that failed persistence
+- Create a new video instead
+
+### Failed Video Response
+
+When `status` is `"failed"`, the response includes an `error` object:
+
+```json
+{
+  "id": "video_abc123",
+  "status": "failed",
+  "progress": 35,
+  "error": {
+    "code": "content_policy_violation",
+    "message": "Content violates our usage policies"
+  }
+}
+```
+
+**Common error codes:**
+- `content_policy_violation` - Prompt violated usage policies
+- `generation_failed` - Technical error during generation
+- `timeout` - Generation took too long
+- `insufficient_quota` - Credits were refunded (shouldn't happen)
+
+## Video URL Lifecycle
+
+### OpenAI Storage (0-45 minutes)
+
+Immediately after completion, videos are served from OpenAI:
+
+```json
+{
+  "url": "https://api.openai.com/v1/files/file_abc123/content",
+  "x-storage-provider": "openai",
+  "x-persisted": false
+}
+```
+
+**Characteristics:**
+- Available for **1 hour only**
+- Fast access
+- Temporary storage
+
+### R2 Storage (45 minutes+)
+
+After 45 minutes, videos are persisted to Cloudflare R2:
+
+```json
+{
+  "url": "https://pub-...r2.dev/videos/2025/11/abc123.mp4",
+  "x-storage-provider": "r2",
+  "x-persisted": true
+}
+```
+
+**Characteristics:**
+- Available **permanently**
+- CDN-backed
+- Lower cost
+
+<Info>
+  The `url` field automatically updates to point to R2 storage after persistence. Your application doesn't need to handle this transition.
+</Info>
+
+## Polling Best Practices
+
+### ✅ Good: Exponential Backoff
+
+```typescript
+async function pollWithBackoff(videoId: string): Promise<Video> {
+  let attempt = 0;
+  const maxDelay = 10000;  // Cap at 10 seconds
+
+  while (true) {
+    const video = await client.videos.retrieve(videoId);
+
+    if (video.status === 'completed' || video.status === 'failed') {
+      return video;
+    }
+
+    // Exponential backoff: 1s, 2s, 4s, 8s, 10s, 10s...
+    const delay = Math.min(Math.pow(2, attempt) * 1000, maxDelay);
+    await new Promise(resolve => setTimeout(resolve, delay));
+
+    attempt++;
+  }
+}
+```
+
+### ✅ Good: Use Webhooks
+
+Instead of polling, use webhooks for real-time notifications:
+
+```typescript
+// Set up webhook once
+await client.webhooks.create({
+  url: 'https://yourapp.com/webhooks/outcry',
+  events: ['video.completed', 'video.failed']
+});
+
+// Create video - webhook will notify you!
+const video = await client.videos.create({...});
+
+// No polling needed!
+```
+
+See the [Webhooks Guide](/guides/webhooks) for setup instructions.
+
+### ❌ Bad: Aggressive Polling
+
+```typescript
+// DON'T DO THIS!
+while (true) {
+  const video = await client.videos.retrieve(videoId);
+  if (video.status === 'completed') break;
+  await new Promise(resolve => setTimeout(resolve, 500));  // 500ms = too fast!
+}
+```
+
+**Problems:**
+- Wastes API quota
+- May hit rate limits (429 errors)
+- Increases latency for other users
+- No benefit (videos don't generate faster)
+
+**Rule of thumb:** Poll **no more than once every 5 seconds**.
+
+## Progress Tracking
+
+The `progress` field shows generation progress (0-100):
+
+```typescript
+const video = await client.videos.retrieve('video_abc123');
+
+if (video.status === 'queued') {
+  console.log('Waiting to start...');
+  // progress = 0
+}
+
+if (video.status === 'in_progress') {
+  console.log(`Generating: ${video.progress}%`);
+  // progress = 1-99
+}
+
+if (video.status === 'completed') {
+  console.log('Done!');
+  // progress = 100
+}
+```
+
+**Progress milestones:**
+- **0%** - Queued, not started
+- **1-25%** - Initializing generation
+- **25-75%** - Actively generating frames
+- **75-99%** - Finalizing video
+- **100%** - Complete
+
+<Warning>
+  Progress is an estimate and may not increase linearly. Don't rely on precise progress values for timing.
+</Warning>
+
+## Required Scopes
+
+This endpoint requires the following API key scopes:
+
+- `video:read` - Retrieve video status
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Download Video" icon="download" href="/api/videos/download">
+    Download the completed video file
+  </Card>
+
+  <Card title="List Videos" icon="list" href="/api/videos/list">
+    List all your videos
+  </Card>
+
+  <Card title="Delete Video" icon="trash" href="/api/videos/delete">
+    Delete a video
+  </Card>
+
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Use webhooks instead of polling
+  </Card>
+</CardGroup>

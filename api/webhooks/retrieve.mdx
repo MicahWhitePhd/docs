@@ -1,0 +1,32 @@
+---
+title: 'Retrieve Webhook'
+api: 'GET /v1/webhooks/{webhook_id}'
+description: 'Get details of a specific webhook'
+---
+
+## Path Parameters
+
+<ParamField path="webhook_id" type="string" required>
+  The ID of the webhook to retrieve
+</ParamField>
+
+## Response
+
+```json
+{
+  "id": "webhook_abc123",
+  "object": "webhook",
+  "url": "https://yourapp.com/webhooks/outcry",
+  "events": ["video.completed", "video.failed"],
+  "is_active": true,
+  "failure_count": 0,
+  "last_success_at": 1730634000,
+  "last_failure_at": null,
+  "created_at": 1730634000,
+  "updated_at": 1730634000
+}
+```
+
+<Note>
+  The webhook secret is never returned after creation for security reasons.
+</Note>

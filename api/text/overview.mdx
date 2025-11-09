@@ -1,0 +1,327 @@
+# Text Completions API Overview
+
+Simple single-shot text generation without conversation state.
+
+## Overview
+
+The Text Completions API provides stateless text generation for one-off tasks like blog posts, social media content, and press releases. Unlike the Chat API, completions don't maintain conversation context.
+
+### Key Features
+
+- **Stateless** - No conversation history
+- **Simple** - Prompt in, text out
+- **Fast** - No session overhead
+- **Theory-Aware** - Strategic framework integration
+- **Cost-Effective** - $0.08 per 1K tokens
+- **OpenAI Compatible** - Works with OpenAI SDK
+
+## Use Cases
+
+- Generate blog posts
+- Write social media content
+- Create press releases
+- Draft campaign slogans
+- Compose fundraising emails
+- Write organizing scripts
+
+## Model
+
+| Model | Context Window | Cost per 1K Tokens |
+|-------|----------------|---------------------|
+| **grok-2** | 128K tokens | $0.08 |
+
+## Quick Example
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a blog post about grassroots organizing'
+});
+
+console.log(completion.choices[0].text);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+completion = client.completions.create(
+    model="grok-2",
+    prompt="Write a blog post about grassroots organizing"
+)
+
+print(completion.choices[0].text)
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/completions \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-2",
+    "prompt": "Write a blog post about grassroots organizing"
+  }'
+```
+
+</CodeGroup>
+
+## Chat vs. Completions
+
+| Feature | Chat API | Completions API |
+|---------|----------|-----------------|
+| **Format** | Structured messages | Simple prompt |
+| **State** | Multi-turn conversations | Stateless |
+| **Use Case** | Interactive chat | One-off generation |
+| **Session** | Maintains context | No context |
+| **Complexity** | More flexible | Simpler |
+
+**When to use Chat:**
+- Multi-turn conversations
+- Interactive Q&A
+- Context-aware responses
+
+**When to use Completions:**
+- Blog posts
+- Social media content
+- Press releases
+- One-off text generation
+
+## Theory of Change Integration
+
+Align text generation with your strategic framework:
+
+```typescript
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a campaign speech about climate justice',
+  // @ts-ignore - Vendor extension
+  'x-theory-position': {
+    x: -0.7,  // Subjective (grassroots)
+    y: -0.5   // Material (concrete action)
+  }
+});
+
+// Output emphasizes grassroots mobilization and direct action
+```
+
+**Theory Positions:**
+- **Voluntarism** `{x: -1, y: -1}` - Grassroots mobilization
+- **Structuralism** `{x: 1, y: -1}` - Policy/systems change
+- **Subjectivism** `{x: -1, y: 1}` - Cultural transformation
+- **Theurgism** `{x: 1, y: 1}` - Faith-based activism
+
+See the [Theory of Change Guide](/guides/theory-of-change) for details.
+
+## Content Presets
+
+### Blog Post
+
+```typescript
+const blogPost = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a 500-word blog post about community organizing.
+Include: Introduction, 3 main points, conclusion.
+Tone: Informative and inspiring.`,
+  max_tokens: 800
+});
+```
+
+### Social Media Thread
+
+```typescript
+const thread = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a Twitter thread (5 tweets) about voter registration.
+Format: Numbered tweets, each under 280 characters.
+Include relevant hashtags.`,
+  max_tokens: 400
+});
+```
+
+### Press Release
+
+```typescript
+const pressRelease = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a press release announcing a climate march.
+Include: Headline, date/location, 3 quotes, contact info.
+Tone: Professional and urgent.`,
+  max_tokens: 600
+});
+```
+
+### Campaign Slogan
+
+```typescript
+const slogans = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Generate 10 campaign slogans for affordable housing advocacy. Each should be punchy and memorable (5-8 words).',
+  temperature: 1.5  // Higher creativity
+});
+```
+
+### Fundraising Email
+
+```typescript
+const email = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a fundraising email for a grassroots campaign.
+Include: Personal story, urgent call-to-action, specific ask.
+Tone: Personal and compelling.
+Length: 300 words.`,
+  max_tokens: 500
+});
+```
+
+## Pricing
+
+Text completions are billed per token at **$0.08 per 1,000 tokens**.
+
+**Token Estimation:**
+- ~750 words = 1,000 tokens
+- Blog post (500 words): ~667 tokens = $0.05
+- Tweet (280 chars): ~70 tokens = $0.006
+- Press release (400 words): ~533 tokens = $0.04
+
+## Rate Limits
+
+| Tier | Requests per Minute | Tokens per Day |
+|------|---------------------|----------------|
+| Free | 10 | 10,000 |
+| Standard | 60 | 1,000,000 |
+| Premium | 300 | 10,000,000 |
+| Enterprise | Custom | Custom |
+
+## Response Format
+
+```json
+{
+  "id": "cmpl_abc123",
+  "object": "text_completion",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [
+    {
+      "text": "Grassroots organizing is the foundation...",
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 200,
+    "total_tokens": 210
+  }
+}
+```
+
+## Best Practices
+
+### 1. Be Specific in Prompts
+
+```typescript
+// ❌ Bad: Vague prompt
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about organizing'
+});
+
+// ✅ Good: Specific prompt with structure
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a 300-word blog post about union organizing.
+Include: History, modern challenges, how to get started.
+Tone: Inspiring and actionable.`
+});
+```
+
+### 2. Control Output Length
+
+```typescript
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a tweet about climate justice',
+  max_tokens: 70  // Twitter character limit
+});
+```
+
+### 3. Adjust Temperature for Use Case
+
+```typescript
+// Factual content: Low temperature
+const factual = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Explain voter registration deadlines',
+  temperature: 0.3
+});
+
+// Creative content: High temperature
+const creative = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Brainstorm campaign slogans',
+  temperature: 1.5
+});
+```
+
+### 4. Use Theory Position for Strategic Alignment
+
+```typescript
+// Grassroots focus
+const grassroots = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about fighting inequality',
+  // @ts-ignore
+  'x-theory-position': { x: -1, y: -1 }  // Voluntarism
+});
+
+// Policy focus
+const policy = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about fighting inequality',
+  // @ts-ignore
+  'x-theory-position': { x: 1, y: -1 }  // Structuralism
+});
+```
+
+## Required Scopes
+
+Text completion endpoints require the following API key scopes:
+
+- `text:write` - Create text completions
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Completion" icon="pen" href="/api/completions/create">
+    Create your first text completion
+  </Card>
+
+  <Card title="Theory of Change" icon="compass" href="/guides/theory-of-change">
+    Align AI with your strategic approach
+  </Card>
+
+  <Card title="Chat API" icon="message" href="/api/chat/overview">
+    Use Chat API for conversations
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

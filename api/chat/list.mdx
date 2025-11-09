@@ -1,0 +1,312 @@
+# List Chat Sessions
+
+List all chat sessions for your organization.
+
+## Endpoint
+
+```
+GET https://api.outcryai.com/v1/chat/completions
+```
+
+## Required Scopes
+
+- `chat:read` - List chat sessions
+
+## Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | integer | 20 | Number of sessions to return (max 100) |
+
+## Response
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "chat_abc123",
+      "object": "chat.completion",
+      "created_at": 1730634060
+    },
+    {
+      "id": "chat_def456",
+      "object": "chat.completion",
+      "created_at": 1730630000
+    }
+  ]
+}
+```
+
+## Examples
+
+### List Recent Sessions
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const sessions = await client.get('/chat/completions');
+console.log(sessions.data);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+response = client.get("/chat/completions")
+print(response["data"])
+```
+
+```bash curl
+curl "https://api.outcryai.com/v1/chat/completions?limit=20" \
+  -H "Authorization: Bearer oc_live_..."
+```
+
+</CodeGroup>
+
+### With Custom Limit
+
+<CodeGroup>
+
+```typescript TypeScript
+const sessions = await client.get('/chat/completions?limit=50');
+console.log(`Found ${sessions.data.length} sessions`);
+```
+
+```python Python
+response = client.get("/chat/completions?limit=50")
+print(f"Found {len(response['data'])} sessions")
+```
+
+```bash curl
+curl "https://api.outcryai.com/v1/chat/completions?limit=50" \
+  -H "Authorization: Bearer oc_live_..."
+```
+
+</CodeGroup>
+
+### Iterate Through All Sessions
+
+<CodeGroup>
+
+```typescript TypeScript
+async function getAllSessions() {
+  const allSessions = [];
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await client.get(
+      `/chat/completions?limit=100`
+    );
+
+    allSessions.push(...response.data);
+    hasMore = response.data.length === 100;
+  }
+
+  return allSessions;
+}
+
+const sessions = await getAllSessions();
+console.log(`Total sessions: ${sessions.length}`);
+```
+
+```python Python
+def get_all_sessions():
+    all_sessions = []
+    has_more = True
+
+    while has_more:
+        response = client.get("/chat/completions?limit=100")
+        all_sessions.extend(response["data"])
+        has_more = len(response["data"]) == 100
+
+    return all_sessions
+
+sessions = get_all_sessions()
+print(f"Total sessions: {len(sessions)}")
+```
+
+</CodeGroup>
+
+## Use Cases
+
+### Session Management Dashboard
+
+Build a dashboard to track conversations:
+
+```typescript
+async function buildDashboard() {
+  const sessions = await client.get('/chat/completions?limit=100');
+
+  const stats = {
+    total: sessions.data.length,
+    today: sessions.data.filter(s =>
+      s.created_at > Date.now() / 1000 - 86400
+    ).length,
+    thisWeek: sessions.data.filter(s =>
+      s.created_at > Date.now() / 1000 - 604800
+    ).length
+  };
+
+  return stats;
+}
+
+const dashboard = await buildDashboard();
+console.log(`Today: ${dashboard.today} | Week: ${dashboard.thisWeek}`);
+```
+
+### Find Recent Session for User
+
+```typescript
+async function findUserSession(userId: string) {
+  const sessions = await client.get('/chat/completions?limit=100');
+
+  // Filter sessions by user (store userId in session metadata)
+  const userSessions = sessions.data.filter(s =>
+    s.id.includes(userId)
+  );
+
+  return userSessions[0]; // Most recent
+}
+```
+
+### Clean Up Old Sessions
+
+```typescript
+async function cleanupOldSessions(daysOld = 30) {
+  const sessions = await client.get('/chat/completions?limit=100');
+  const cutoff = Date.now() / 1000 - (daysOld * 86400);
+
+  const oldSessions = sessions.data.filter(s => s.created_at < cutoff);
+
+  console.log(`Found ${oldSessions.length} sessions older than ${daysOld} days`);
+
+  // Delete old sessions (if needed)
+  for (const session of oldSessions) {
+    // await client.delete(`/chat/completions/${session.id}`);
+  }
+}
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid or expired API key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+### 429 Too Many Requests
+
+```json
+{
+  "error": {
+    "type": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Retry after 30 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+## Pricing
+
+Listing sessions is **free** - no token usage.
+
+## Rate Limits
+
+| Tier | Requests per Minute |
+|------|---------------------|
+| Free | 10 |
+| Standard | 60 |
+| Premium | 300 |
+| Enterprise | Custom |
+
+## Best Practices
+
+### 1. Use Pagination
+
+Limit results to avoid timeouts:
+
+```typescript
+// ❌ Bad: May timeout with many sessions
+const sessions = await client.get('/chat/completions');
+
+// ✅ Good: Paginate with explicit limit
+const sessions = await client.get('/chat/completions?limit=100');
+```
+
+### 2. Cache Session List
+
+Cache the list to reduce API calls:
+
+```typescript
+let cachedSessions = null;
+let cacheTime = 0;
+const CACHE_TTL = 60000; // 1 minute
+
+async function getSessionsCached() {
+  if (cachedSessions && Date.now() - cacheTime < CACHE_TTL) {
+    return cachedSessions;
+  }
+
+  cachedSessions = await client.get('/chat/completions');
+  cacheTime = Date.now();
+  return cachedSessions;
+}
+```
+
+### 3. Filter Client-Side
+
+Use client-side filtering for better performance:
+
+```typescript
+const allSessions = await client.get('/chat/completions?limit=100');
+
+// Filter by date
+const todaySessions = allSessions.data.filter(s =>
+  s.created_at > Date.now() / 1000 - 86400
+);
+
+// Filter by ID pattern
+const userSessions = allSessions.data.filter(s =>
+  s.id.startsWith('user-123')
+);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Retrieve Session" icon="eye" href="/api/chat/retrieve">
+    Get details for a specific session
+  </Card>
+
+  <Card title="Create Completion" icon="message" href="/api/chat/create">
+    Create a new chat completion
+  </Card>
+
+  <Card title="Rate Limiting" icon="gauge" href="/guides/rate-limiting">
+    Understand rate limits
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

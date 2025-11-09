@@ -1,0 +1,49 @@
+---
+title: 'Webhooks Overview'
+description: 'Receive real-time notifications for video generation and chat events'
+---
+
+## Introduction
+
+Webhooks allow you to receive real-time HTTP callbacks when events occur in your Outcry AI account. This is particularly useful for video generation, where processing can take 60-90 seconds.
+
+## Use Cases
+
+- **Video Generation**: Get notified when videos complete or fail
+- **Chat Completion**: Receive updates when long-running chat requests finish
+- **Error Handling**: Be alerted when API errors occur
+
+## How Webhooks Work
+
+1. **Register** a webhook endpoint with your desired event types
+2. **Receive** POST requests to your endpoint when events occur
+3. **Verify** the webhook signature to ensure authenticity
+4. **Process** the event data in your application
+
+## Supported Events
+
+| Event | Description |
+|-------|-------------|
+| `video.completed` | Video generation finished successfully |
+| `video.failed` | Video generation failed |
+| `video.expired` | Video URL expired (after 1 hour on OpenAI) |
+| `chat.completed` | Chat completion finished |
+| `chat.failed` | Chat completion failed |
+
+## Security
+
+All webhook requests include:
+- **Signature Header**: `X-Outcry-Signature` with HMAC-SHA256 signature
+- **Timestamp Header**: `X-Outcry-Timestamp` to prevent replay attacks
+- **Secret**: Unique webhook secret provided on creation
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Webhook" icon="plus" href="/api/webhooks/create">
+    Register a new webhook endpoint
+  </Card>
+  <Card title="Webhook Guide" icon="book" href="/guides/webhooks">
+    Comprehensive webhook setup guide
+  </Card>
+</CardGroup>

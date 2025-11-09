@@ -1,0 +1,684 @@
+# Best Practices
+
+Optimize your API usage for performance, reliability, and cost.
+
+## Overview
+
+Follow these best practices to build robust applications with the Outcry AI API.
+
+## Authentication
+
+### 1. Secure API Key Storage
+
+**Never** commit API keys to version control:
+
+<CodeGroup>
+
+```typescript TypeScript
+// ❌ Bad: Hardcoded API key
+const client = new OpenAI({
+  apiKey: 'oc_live_abc123...',
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+// ✅ Good: Environment variable
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+```
+
+```python Python
+# ❌ Bad: Hardcoded API key
+client = OpenAI(
+    api_key="oc_live_abc123...",
+    base_url="https://api.outcryai.com/v1"
+)
+
+# ✅ Good: Environment variable
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+```
+
+</CodeGroup>
+
+### 2. Use Test Keys in Development
+
+```bash
+# .env.development
+OUTCRY_API_KEY=oc_test_...
+
+# .env.production
+OUTCRY_API_KEY=oc_live_...
+```
+
+### 3. Rotate Keys Regularly
+
+Rotate API keys every 90 days for security:
+
+```typescript
+// Old key
+const oldKey = 'oc_live_old...';
+
+// Generate new key via dashboard
+const newKey = 'oc_live_new...';
+
+// Deploy with new key
+// Revoke old key after 24 hours
+```
+
+### 4. Use Scoped Keys
+
+Create keys with minimal required scopes:
+
+```typescript
+// ❌ Bad: Admin key for everything
+apiKey.scopes = ['admin'];
+
+// ✅ Good: Scoped keys per use case
+videoKey.scopes = ['video:read', 'video:write'];
+chatKey.scopes = ['chat:read', 'chat:write'];
+```
+
+## Error Handling
+
+### 1. Always Implement Retry Logic
+
+```typescript
+async function makeRequestWithRetry<T>(
+  requestFn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await requestFn();
+    } catch (error) {
+      if (error.status === 429) {
+        // Rate limit - exponential backoff
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else if (error.status >= 500) {
+        // Server error - retry
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        // Client error - don't retry
+        throw error;
+      }
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+### 2. Handle All Error Types
+
+```typescript
+try {
+  const completion = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: 'Hello' }]
+  });
+} catch (error) {
+  if (error.status === 401) {
+    // Invalid API key
+    console.error('Invalid API key. Please check your credentials.');
+  } else if (error.status === 402) {
+    // Insufficient balance
+    console.error('Insufficient balance. Please add funds.');
+  } else if (error.status === 429) {
+    // Rate limit
+    console.error('Rate limit exceeded. Please wait and retry.');
+  } else if (error.status >= 500) {
+    // Server error
+    console.error('Server error. Please retry.');
+  } else {
+    // Unknown error
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+### 3. Implement Circuit Breaker Pattern
+
+```typescript
+class CircuitBreaker {
+  private failureCount = 0;
+  private lastFailureTime = 0;
+  private state: 'closed' | 'open' | 'half-open' = 'closed';
+  private readonly threshold = 5;
+  private readonly resetTimeout = 60000;
+
+  async execute<T>(requestFn: () => Promise<T>): Promise<T> {
+    if (this.state === 'open') {
+      if (Date.now() - this.lastFailureTime > this.resetTimeout) {
+        this.state = 'half-open';
+      } else {
+        throw new Error('Circuit breaker is open');
+      }
+    }
+
+    try {
+      const result = await requestFn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+
+  private onSuccess() {
+    this.failureCount = 0;
+    this.state = 'closed';
+  }
+
+  private onFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+    if (this.failureCount >= this.threshold) {
+      this.state = 'open';
+    }
+  }
+}
+```
+
+## Performance Optimization
+
+### 1. Use Streaming for Long Responses
+
+```typescript
+// ❌ Bad: Wait for full response
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Write a long essay' }]
+});
+// User waits 10+ seconds
+
+// ✅ Good: Stream tokens in real-time
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Write a long essay' }],
+  stream: true
+});
+// User sees progress immediately
+```
+
+### 2. Cache Responses
+
+```typescript
+const cache = new Map<string, any>();
+const CACHE_TTL = 3600000; // 1 hour
+
+async function cachedRequest<T>(
+  cacheKey: string,
+  requestFn: () => Promise<T>,
+  ttl = CACHE_TTL
+): Promise<T> {
+  const cached = cache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < ttl) {
+    return cached.data;
+  }
+
+  const data = await requestFn();
+  cache.set(cacheKey, { data, timestamp: Date.now() });
+  return data;
+}
+
+// Usage
+const completion = await cachedRequest(
+  'faq-organizing',
+  () => client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: 'What is organizing?' }]
+  })
+);
+```
+
+### 3. Batch Requests
+
+```typescript
+// ❌ Bad: Sequential requests
+for (const message of messages) {
+  await processMessage(message);
+}
+
+// ✅ Good: Concurrent requests (within rate limits)
+const queue = new RequestQueue(60); // 60 RPM
+await Promise.all(
+  messages.map(message => queue.enqueue(() => processMessage(message)))
+);
+```
+
+### 4. Optimize Token Usage
+
+```typescript
+// ❌ Bad: Long context window
+const messages = allHistoryMessages; // 50,000 tokens
+
+// ✅ Good: Trim to recent context
+function trimMessages(messages: Message[], maxTokens = 10000) {
+  let totalTokens = 0;
+  const trimmed: Message[] = [];
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const tokens = estimateTokens(messages[i].content);
+    if (totalTokens + tokens > maxTokens) break;
+    trimmed.unshift(messages[i]);
+    totalTokens += tokens;
+  }
+
+  return trimmed;
+}
+
+const messages = trimMessages(allHistoryMessages);
+```
+
+## Cost Optimization
+
+### 1. Monitor Token Usage
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Hello' }]
+});
+
+const { prompt_tokens, completion_tokens, total_tokens } = completion.usage;
+const cost = (total_tokens / 1000) * 0.08; // $0.08 per 1K tokens
+
+console.log(`Cost: $${cost.toFixed(4)} (${total_tokens} tokens)`);
+```
+
+### 2. Use Lower Temperature for Predictable Costs
+
+```typescript
+// ❌ Bad: High temperature = unpredictable length
+const creative = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Write about activism' }],
+  temperature: 1.8
+});
+// Might generate 5,000 tokens
+
+// ✅ Good: Low temperature + max_tokens
+const controlled = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Write about activism' }],
+  temperature: 0.7,
+  max_tokens: 500
+});
+// Guaranteed max 500 tokens
+```
+
+### 3. Reuse Session Context
+
+```typescript
+// ❌ Bad: Create new session for each request
+for (const question of questions) {
+  await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: question }]
+  });
+}
+
+// ✅ Good: Reuse session
+const sessionId = 'user-123-session';
+for (const question of questions) {
+  await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: question }],
+    // @ts-ignore
+    session_id: sessionId
+  });
+}
+```
+
+### 4. Set Budget Alerts
+
+```typescript
+async function checkMonthlySpend(organizationId: string) {
+  const usage = await getUsageStats(organizationId);
+  const monthlyCost = usage.currentMonthUsageCents / 100;
+
+  if (monthlyCost > 1000) {
+    await sendAlert(`Monthly spend: $${monthlyCost} (exceeds $1,000 budget)`);
+  }
+}
+```
+
+## Video Generation
+
+### 1. Use Appropriate Duration
+
+```typescript
+// ❌ Bad: Always use longest duration
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Quick logo animation',
+  seconds: '12'  // Costs 3x more than needed
+});
+
+// ✅ Good: Match duration to use case
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Quick logo animation',
+  seconds: '4'  // Perfect for short animation
+});
+```
+
+### 2. Poll Video Status Efficiently
+
+```typescript
+// ❌ Bad: Poll every second
+while (true) {
+  const video = await client.videos.retrieve(videoId);
+  if (video.status === 'completed') break;
+  await new Promise(resolve => setTimeout(resolve, 1000)); // Too frequent!
+}
+
+// ✅ Good: Poll every 5-10 seconds
+async function waitForVideo(videoId: string) {
+  while (true) {
+    const video = await client.videos.retrieve(videoId);
+
+    if (video.status === 'completed') {
+      return video;
+    } else if (video.status === 'failed') {
+      throw new Error('Video generation failed');
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Reasonable interval
+  }
+}
+```
+
+### 3. Use Webhooks for Long Operations
+
+```typescript
+// ❌ Bad: Poll for 90 seconds
+const video = await client.videos.create({ ... });
+await waitForVideo(video.id); // Blocking for 90 seconds
+
+// ✅ Good: Use webhooks
+const video = await client.videos.create({ ... });
+// Webhook will notify when complete
+```
+
+### 4. Delete Old Videos
+
+```typescript
+// Clean up videos older than 30 days
+async function cleanupOldVideos() {
+  const videos = await client.videos.list({ limit: 100 });
+
+  const thirtyDaysAgo = Date.now() / 1000 - (30 * 86400);
+
+  for (const video of videos.data) {
+    if (video.created_at < thirtyDaysAgo) {
+      await client.videos.delete(video.id);
+      console.log(`Deleted video ${video.id}`);
+    }
+  }
+}
+```
+
+## Context Management
+
+### 1. Trim Long Conversations
+
+```typescript
+function trimConversation(messages: Message[], maxTokens = 10000): Message[] {
+  // Always keep system message
+  const systemMessage = messages.find(m => m.role === 'system');
+  const otherMessages = messages.filter(m => m.role !== 'system');
+
+  let totalTokens = systemMessage ? estimateTokens(systemMessage.content) : 0;
+  const trimmed: Message[] = systemMessage ? [systemMessage] : [];
+
+  // Add messages from most recent
+  for (let i = otherMessages.length - 1; i >= 0; i--) {
+    const tokens = estimateTokens(otherMessages[i].content);
+
+    if (totalTokens + tokens > maxTokens) {
+      break;
+    }
+
+    trimmed.splice(1, 0, otherMessages[i]); // Insert after system message
+    totalTokens += tokens;
+  }
+
+  return trimmed;
+}
+```
+
+### 2. Summarize Old Context
+
+```typescript
+async function summarizeOldContext(messages: Message[]): Promise<Message[]> {
+  // Separate system, old, and recent messages
+  const systemMessage = messages.find(m => m.role === 'system');
+  const recentMessages = messages.slice(-10);
+  const oldMessages = messages.slice(0, -10).filter(m => m.role !== 'system');
+
+  if (oldMessages.length === 0) {
+    return messages;
+  }
+
+  // Summarize old messages
+  const summary = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [
+      {
+        role: 'user',
+        content: `Summarize this conversation in 3-4 sentences:\n\n${oldMessages
+          .map(m => `${m.role}: ${m.content}`)
+          .join('\n')}`
+      }
+    ],
+    max_tokens: 200
+  });
+
+  return [
+    systemMessage,
+    { role: 'assistant', content: `Previous conversation summary: ${summary.choices[0].message.content}` },
+    ...recentMessages
+  ].filter(Boolean) as Message[];
+}
+```
+
+## Theory of Change
+
+### 1. Align Theory with Use Case
+
+```typescript
+// Grassroots campaign
+const grassroots = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'How do I build community power?' }],
+  // @ts-ignore
+  'x-theory-position': { x: -0.8, y: -0.6 } // Voluntarism
+});
+
+// Policy advocacy
+const policy = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'How do I influence legislation?' }],
+  // @ts-ignore
+  'x-theory-position': { x: 0.8, y: -0.4 } // Structuralism
+});
+```
+
+### 2. Test Different Theories
+
+```typescript
+const theories = [
+  { name: 'Voluntarism', position: { x: -1, y: -1 } },
+  { name: 'Structuralism', position: { x: 1, y: -1 } },
+  { name: 'Subjectivism', position: { x: -1, y: 1 } },
+  { name: 'Theurgism', position: { x: 1, y: 1 } }
+];
+
+for (const theory of theories) {
+  const completion = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: 'How do I create change?' }],
+    // @ts-ignore
+    'x-theory-position': theory.position
+  });
+
+  console.log(`${theory.name}:`, completion.choices[0].message.content);
+}
+```
+
+## Monitoring & Observability
+
+### 1. Log All API Calls
+
+```typescript
+async function loggedRequest<T>(
+  name: string,
+  requestFn: () => Promise<T>
+): Promise<T> {
+  const startTime = Date.now();
+
+  try {
+    const result = await requestFn();
+    const duration = Date.now() - startTime;
+
+    console.log({
+      name,
+      status: 'success',
+      duration,
+      timestamp: new Date().toISOString()
+    });
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+
+    console.error({
+      name,
+      status: 'error',
+      error: error.message,
+      duration,
+      timestamp: new Date().toISOString()
+    });
+
+    throw error;
+  }
+}
+```
+
+### 2. Track Costs in Real-Time
+
+```typescript
+let dailyCost = 0;
+
+async function trackCost(requestFn: () => Promise<any>) {
+  const result = await requestFn();
+
+  if (result.usage) {
+    const cost = (result.usage.total_tokens / 1000) * 0.08;
+    dailyCost += cost;
+    console.log(`Request cost: $${cost.toFixed(4)} | Daily total: $${dailyCost.toFixed(2)}`);
+  }
+
+  return result;
+}
+```
+
+### 3. Set Up Alerts
+
+```typescript
+async function checkHealthAndAlert() {
+  try {
+    const health = await fetch('https://api.outcryai.com/v1/health');
+
+    if (!health.ok) {
+      await sendAlert('API health check failed');
+    }
+  } catch (error) {
+    await sendAlert(`API unreachable: ${error.message}`);
+  }
+}
+
+// Run every 5 minutes
+setInterval(checkHealthAndAlert, 300000);
+```
+
+## Testing
+
+### 1. Use Test API Keys
+
+```typescript
+// Test environment
+const testClient = new OpenAI({
+  apiKey: process.env.OUTCRY_TEST_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+// Production environment
+const prodClient = new OpenAI({
+  apiKey: process.env.OUTCRY_LIVE_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+```
+
+### 2. Mock API Responses
+
+```typescript
+// Mock for unit tests
+jest.mock('openai', () => ({
+  OpenAI: jest.fn().mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: jest.fn().mockResolvedValue({
+          choices: [{ message: { content: 'Mocked response' } }]
+        })
+      }
+    }
+  }))
+}));
+```
+
+### 3. Test Error Scenarios
+
+```typescript
+describe('API Error Handling', () => {
+  it('should retry on 429 rate limit', async () => {
+    // Test retry logic
+  });
+
+  it('should handle 402 insufficient balance', async () => {
+    // Test balance error handling
+  });
+
+  it('should fail fast on 401 auth error', async () => {
+    // Test auth error handling
+  });
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+
+  <Card title="Rate Limiting" icon="gauge" href="/guides/rate-limiting">
+    Understand rate limits
+  </Card>
+
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Set up webhooks
+  </Card>
+
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    Manage API keys
+  </Card>
+</CardGroup>

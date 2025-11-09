@@ -1,0 +1,25 @@
+---
+title: 'Delete Webhook'
+api: 'DELETE /v1/webhooks/{webhook_id}'
+description: 'Permanently delete a webhook'
+---
+
+## Path Parameters
+
+<ParamField path="webhook_id" type="string" required>
+  The ID of the webhook to delete
+</ParamField>
+
+## Response
+
+```json
+{
+  "id": "webhook_abc123",
+  "object": "webhook",
+  "deleted": true
+}
+```
+
+<Warning>
+  This action cannot be undone. The webhook will immediately stop receiving events.
+</Warning>

@@ -1,0 +1,655 @@
+# Create Text Completion
+
+Generate text from a simple prompt without conversation state.
+
+<Note>This endpoint is 100% OpenAI SDK compatible. Just change the base URL!</Note>
+
+## Endpoint
+
+```
+POST https://api.outcryai.com/v1/completions
+```
+
+## Required Scopes
+
+- `text:write` - Create text completions
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `model` | string | Yes | Model ID: `"grok-2"` |
+| `prompt` | string | Yes | Text prompt to complete |
+| `temperature` | number | No | Randomness (0-2, default: 1) |
+| `max_tokens` | number | No | Maximum completion tokens |
+| `x-theory-position` | object | No | Theory of Change position `{x, y}` |
+
+## Response
+
+```json
+{
+  "id": "cmpl_abc123",
+  "object": "text_completion",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [
+    {
+      "text": "Grassroots organizing is the foundation of social change...",
+      "index": 0,
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 10,
+    "completion_tokens": 200,
+    "total_tokens": 210
+  }
+}
+```
+
+## Examples
+
+### Basic Completion
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a blog post about grassroots organizing'
+});
+
+console.log(completion.choices[0].text);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+completion = client.completions.create(
+    model="grok-2",
+    prompt="Write a blog post about grassroots organizing"
+)
+
+print(completion.choices[0].text)
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/completions \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-2",
+    "prompt": "Write a blog post about grassroots organizing"
+  }'
+```
+
+</CodeGroup>
+
+### Blog Post Generation
+
+Generate structured blog content:
+
+<CodeGroup>
+
+```typescript TypeScript
+const blogPost = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a 500-word blog post about community organizing.
+
+Structure:
+- Introduction: Why organizing matters
+- Body: 3 key principles of effective organizing
+- Conclusion: Call to action
+
+Tone: Inspiring and actionable.`,
+  max_tokens: 800
+});
+
+console.log(blogPost.choices[0].text);
+```
+
+```python Python
+blog_post = client.completions.create(
+    model="grok-2",
+    prompt="""Write a 500-word blog post about community organizing.
+
+Structure:
+- Introduction: Why organizing matters
+- Body: 3 key principles of effective organizing
+- Conclusion: Call to action
+
+Tone: Inspiring and actionable.""",
+    max_tokens=800
+)
+
+print(blog_post.choices[0].text)
+```
+
+</CodeGroup>
+
+### Social Media Content
+
+Generate Twitter threads:
+
+<CodeGroup>
+
+```typescript TypeScript
+const thread = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a Twitter thread (5 tweets) about voter registration.
+
+Format:
+- Tweet 1: Hook (why it matters)
+- Tweets 2-4: Key information
+- Tweet 5: Call to action
+
+Each tweet must be under 280 characters.
+Include relevant hashtags.`,
+  max_tokens: 400,
+  temperature: 1.2  // Slightly more creative
+});
+
+console.log(thread.choices[0].text);
+```
+
+```python Python
+thread = client.completions.create(
+    model="grok-2",
+    prompt="""Write a Twitter thread (5 tweets) about voter registration.
+
+Format:
+- Tweet 1: Hook (why it matters)
+- Tweets 2-4: Key information
+- Tweet 5: Call to action
+
+Each tweet must be under 280 characters.
+Include relevant hashtags.""",
+    max_tokens=400,
+    temperature=1.2  # Slightly more creative
+)
+
+print(thread.choices[0].text)
+```
+
+</CodeGroup>
+
+### Press Release
+
+Generate professional press releases:
+
+<CodeGroup>
+
+```typescript TypeScript
+const pressRelease = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a press release announcing a climate march on June 15, 2025.
+
+Include:
+- Headline (attention-grabbing)
+- Date and location: June 15, 2025, City Hall
+- 2-3 paragraphs about the march
+- 3 quotes from organizers
+- Contact information
+
+Tone: Professional, urgent, inspiring.`,
+  max_tokens: 600,
+  temperature: 0.7
+});
+
+console.log(pressRelease.choices[0].text);
+```
+
+```python Python
+press_release = client.completions.create(
+    model="grok-2",
+    prompt="""Write a press release announcing a climate march on June 15, 2025.
+
+Include:
+- Headline (attention-grabbing)
+- Date and location: June 15, 2025, City Hall
+- 2-3 paragraphs about the march
+- 3 quotes from organizers
+- Contact information
+
+Tone: Professional, urgent, inspiring.""",
+    max_tokens=600,
+    temperature=0.7
+)
+
+print(press_release.choices[0].text)
+```
+
+</CodeGroup>
+
+### Campaign Slogans
+
+Brainstorm creative slogans:
+
+<CodeGroup>
+
+```typescript TypeScript
+const slogans = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Generate 10 campaign slogans for affordable housing advocacy.
+
+Requirements:
+- Each slogan: 5-8 words
+- Punchy and memorable
+- Action-oriented
+- Diverse approaches (grassroots, policy, community)
+
+Format as numbered list.`,
+  temperature: 1.5,  // High creativity
+  max_tokens: 300
+});
+
+console.log(slogans.choices[0].text);
+```
+
+```python Python
+slogans = client.completions.create(
+    model="grok-2",
+    prompt="""Generate 10 campaign slogans for affordable housing advocacy.
+
+Requirements:
+- Each slogan: 5-8 words
+- Punchy and memorable
+- Action-oriented
+- Diverse approaches (grassroots, policy, community)
+
+Format as numbered list.""",
+    temperature=1.5,  # High creativity
+    max_tokens=300
+)
+
+print(slogans.choices[0].text)
+```
+
+</CodeGroup>
+
+### Fundraising Email
+
+Generate compelling fundraising content:
+
+<CodeGroup>
+
+```typescript TypeScript
+const email = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a fundraising email for a grassroots climate campaign.
+
+Include:
+- Personal opening: Story from frontline community
+- Problem: Climate crisis impact
+- Solution: Our campaign's approach
+- Ask: Donate $25, $50, or $100
+- Urgency: Matching grant deadline
+
+Length: 300 words
+Tone: Personal, urgent, hopeful`,
+  max_tokens: 500
+});
+
+console.log(email.choices[0].text);
+```
+
+```python Python
+email = client.completions.create(
+    model="grok-2",
+    prompt="""Write a fundraising email for a grassroots climate campaign.
+
+Include:
+- Personal opening: Story from frontline community
+- Problem: Climate crisis impact
+- Solution: Our campaign's approach
+- Ask: Donate $25, $50, or $100
+- Urgency: Matching grant deadline
+
+Length: 300 words
+Tone: Personal, urgent, hopeful""",
+    max_tokens=500
+)
+
+print(email.choices[0].text)
+```
+
+</CodeGroup>
+
+### With Theory of Change
+
+Align content with strategic framework:
+
+<CodeGroup>
+
+```typescript TypeScript
+// Grassroots mobilization focus
+const grassrootsContent = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about fighting economic inequality',
+  // @ts-ignore - Vendor extension
+  'x-theory-position': {
+    x: -1,  // Subjective
+    y: -1   // Material
+  }
+});
+// Output emphasizes direct action, community power, mass mobilization
+
+// Policy reform focus
+const policyContent = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about fighting economic inequality',
+  // @ts-ignore - Vendor extension
+  'x-theory-position': {
+    x: 1,   // Objective
+    y: -1   // Material
+  }
+});
+// Output emphasizes legislation, systemic change, institutions
+```
+
+```python Python
+# Grassroots mobilization focus
+grassroots_content = client.completions.create(
+    model="grok-2",
+    prompt="Write about fighting economic inequality",
+    x_theory_position={
+        "x": -1,  # Subjective
+        "y": -1   # Material
+    }
+)
+# Output emphasizes direct action, community power, mass mobilization
+
+# Policy reform focus
+policy_content = client.completions.create(
+    model="grok-2",
+    prompt="Write about fighting economic inequality",
+    x_theory_position={
+        "x": 1,   # Objective
+        "y": -1   # Material
+    }
+)
+# Output emphasizes legislation, systemic change, institutions
+```
+
+</CodeGroup>
+
+**Theory Positions:**
+- **Voluntarism** `{x: -1, y: -1}` - Grassroots mobilization
+- **Structuralism** `{x: 1, y: -1}` - Policy/systems change
+- **Subjectivism** `{x: -1, y: 1}` - Cultural transformation
+- **Theurgism** `{x: 1, y: 1}` - Faith-based activism
+
+See the [Theory of Change Guide](/guides/theory-of-change) for details.
+
+### Temperature Control
+
+Adjust creativity vs. consistency:
+
+<CodeGroup>
+
+```typescript TypeScript
+// Factual content: Low temperature
+const factual = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Explain voter registration deadlines in California',
+  temperature: 0.3  // More focused, deterministic
+});
+
+// Creative content: High temperature
+const creative = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Brainstorm creative protest art ideas',
+  temperature: 1.5  // More varied, creative
+});
+```
+
+```python Python
+# Factual content: Low temperature
+factual = client.completions.create(
+    model="grok-2",
+    prompt="Explain voter registration deadlines in California",
+    temperature=0.3  # More focused, deterministic
+)
+
+# Creative content: High temperature
+creative = client.completions.create(
+    model="grok-2",
+    prompt="Brainstorm creative protest art ideas",
+    temperature=1.5  # More varied, creative
+)
+```
+
+</CodeGroup>
+
+### Max Tokens Control
+
+Limit output length:
+
+<CodeGroup>
+
+```typescript TypeScript
+// Tweet (280 characters ≈ 70 tokens)
+const tweet = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a tweet about climate justice',
+  max_tokens: 70
+});
+
+// Short paragraph (100 words ≈ 133 tokens)
+const paragraph = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Explain direct action in one paragraph',
+  max_tokens: 150
+});
+
+// Blog post (500 words ≈ 667 tokens)
+const blogPost = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a 500-word blog post about organizing',
+  max_tokens: 800
+});
+```
+
+```python Python
+# Tweet (280 characters ≈ 70 tokens)
+tweet = client.completions.create(
+    model="grok-2",
+    prompt="Write a tweet about climate justice",
+    max_tokens=70
+)
+
+# Short paragraph (100 words ≈ 133 tokens)
+paragraph = client.completions.create(
+    model="grok-2",
+    prompt="Explain direct action in one paragraph",
+    max_tokens=150
+)
+
+# Blog post (500 words ≈ 667 tokens)
+blog_post = client.completions.create(
+    model="grok-2",
+    prompt="Write a 500-word blog post about organizing",
+    max_tokens=800
+)
+```
+
+</CodeGroup>
+
+## Error Responses
+
+### 400 Bad Request
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Missing or invalid prompt",
+    "param": "prompt",
+    "code": "invalid_prompt"
+  }
+}
+```
+
+### 401 Unauthorized
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid or expired API key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+### 402 Payment Required
+
+```json
+{
+  "error": {
+    "type": "insufficient_quota",
+    "message": "Insufficient prepaid balance. Please add funds to continue.",
+    "code": "insufficient_quota"
+  }
+}
+```
+
+### 429 Too Many Requests
+
+```json
+{
+  "error": {
+    "type": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Retry after 30 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+## Pricing
+
+Text completions are billed per token at **$0.08 per 1,000 tokens**.
+
+**Token Estimation:**
+- ~750 words = 1,000 tokens
+- Blog post (500 words): ~667 tokens = $0.05
+- Tweet (280 chars): ~70 tokens = $0.006
+- Press release (400 words): ~533 tokens = $0.04
+
+**Example costs:**
+```
+Prompt: "Write a blog post" (5 tokens)
+Output: 500-word blog post (667 tokens)
+Total: 672 tokens = $0.05
+```
+
+## Rate Limits
+
+| Tier | Requests per Minute | Tokens per Day |
+|------|---------------------|----------------|
+| Free | 10 | 10,000 |
+| Standard | 60 | 1,000,000 |
+| Premium | 300 | 10,000,000 |
+| Enterprise | Custom | Custom |
+
+## Best Practices
+
+### 1. Be Specific in Prompts
+
+```typescript
+// ❌ Bad: Vague prompt
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about organizing'
+});
+
+// ✅ Good: Specific with structure and tone
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: `Write a 300-word blog post about union organizing.
+Include: History, modern challenges, how to get started.
+Tone: Inspiring and actionable.`
+});
+```
+
+### 2. Control Output Length
+
+```typescript
+const completion = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write a tweet about climate justice',
+  max_tokens: 70  // Twitter character limit
+});
+```
+
+### 3. Adjust Temperature for Use Case
+
+- **Factual content** (temperature: 0.2-0.5) - Facts, explanations, guides
+- **Balanced content** (temperature: 0.7-1.0) - Blog posts, emails, articles
+- **Creative content** (temperature: 1.2-1.8) - Slogans, poetry, brainstorming
+
+### 4. Use Theory Position for Strategic Alignment
+
+```typescript
+const grassroots = await client.completions.create({
+  model: 'grok-2',
+  prompt: 'Write about fighting inequality',
+  // @ts-ignore
+  'x-theory-position': { x: -1, y: -1 }  // Voluntarism
+});
+```
+
+### 5. Handle Errors Gracefully
+
+```typescript
+try {
+  const completion = await client.completions.create({
+    model: 'grok-2',
+    prompt: 'Write content...'
+  });
+} catch (error) {
+  if (error.status === 429) {
+    // Rate limit exceeded - wait and retry
+    await new Promise(resolve => setTimeout(resolve, 30000));
+  } else if (error.status === 402) {
+    // Insufficient balance - prompt user to add funds
+    console.error('Please add funds to continue');
+  } else {
+    throw error;
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Completions Overview" icon="book" href="/api/completions/overview">
+    Learn about text completions
+  </Card>
+
+  <Card title="Theory of Change" icon="compass" href="/guides/theory-of-change">
+    Align AI with your strategic approach
+  </Card>
+
+  <Card title="Chat API" icon="message" href="/api/chat/overview">
+    Use Chat API for conversations
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

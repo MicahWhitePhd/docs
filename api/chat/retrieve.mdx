@@ -1,0 +1,462 @@
+# Retrieve Chat Session
+
+Get details for a specific chat session including all messages.
+
+## Endpoint
+
+```
+GET https://api.outcryai.com/v1/chat/completions/:id
+```
+
+## Required Scopes
+
+- `chat:read` - Retrieve chat session details
+
+## Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | string | Chat session ID (e.g., `chat_abc123`) |
+
+## Response
+
+```json
+{
+  "id": "chat_abc123",
+  "object": "chat.completion",
+  "created_at": 1730634060,
+  "messages": [
+    {
+      "role": "user",
+      "content": "How do I organize a grassroots campaign?",
+      "created_at": 1730634060
+    },
+    {
+      "role": "assistant",
+      "content": "To organize a grassroots campaign...",
+      "created_at": 1730634065
+    }
+  ]
+}
+```
+
+## Examples
+
+### Basic Retrieval
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const session = await client.get('/chat/completions/chat_abc123');
+console.log(session);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+session = client.get("/chat/completions/chat_abc123")
+print(session)
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/chat/completions/chat_abc123 \
+  -H "Authorization: Bearer oc_live_..."
+```
+
+</CodeGroup>
+
+### Continue Conversation
+
+Retrieve messages and continue the conversation:
+
+<CodeGroup>
+
+```typescript TypeScript
+async function continueConversation(sessionId: string, newMessage: string) {
+  // Get existing session
+  const session = await client.get(`/chat/completions/${sessionId}`);
+
+  // Build messages array from history
+  const messages = session.messages.map(m => ({
+    role: m.role,
+    content: m.content
+  }));
+
+  // Add new message
+  messages.push({
+    role: 'user',
+    content: newMessage
+  });
+
+  // Create completion with full history
+  const completion = await client.chat.completions.create({
+    model: 'grok-2',
+    messages
+  });
+
+  return completion.choices[0].message.content;
+}
+
+const response = await continueConversation(
+  'chat_abc123',
+  'Can you give me more examples?'
+);
+```
+
+```python Python
+async def continue_conversation(session_id: str, new_message: str):
+    # Get existing session
+    session = client.get(f"/chat/completions/{session_id}")
+
+    # Build messages array from history
+    messages = [
+        {"role": m["role"], "content": m["content"]}
+        for m in session["messages"]
+    ]
+
+    # Add new message
+    messages.append({
+        "role": "user",
+        "content": new_message
+    })
+
+    # Create completion with full history
+    completion = client.chat.completions.create(
+        model="grok-2",
+        messages=messages
+    )
+
+    return completion.choices[0].message.content
+
+response = await continue_conversation(
+    "chat_abc123",
+    "Can you give me more examples?"
+)
+```
+
+</CodeGroup>
+
+### Export Conversation
+
+Export conversation as markdown:
+
+<CodeGroup>
+
+```typescript TypeScript
+async function exportConversationAsMarkdown(sessionId: string) {
+  const session = await client.get(`/chat/completions/${sessionId}`);
+
+  let markdown = `# Conversation ${sessionId}\n\n`;
+  markdown += `**Created:** ${new Date(session.created_at * 1000).toISOString()}\n\n---\n\n`;
+
+  for (const message of session.messages) {
+    const role = message.role === 'user' ? '**You:**' : '**Assistant:**';
+    markdown += `${role}\n\n${message.content}\n\n---\n\n`;
+  }
+
+  return markdown;
+}
+
+const markdown = await exportConversationAsMarkdown('chat_abc123');
+console.log(markdown);
+```
+
+```python Python
+async def export_conversation_as_markdown(session_id: str):
+    session = client.get(f"/chat/completions/{session_id}")
+
+    markdown = f"# Conversation {session_id}\n\n"
+    markdown += f"**Created:** {session['created_at']}\n\n---\n\n"
+
+    for message in session["messages"]:
+        role = "**You:**" if message["role"] == "user" else "**Assistant:**"
+        markdown += f"{role}\n\n{message['content']}\n\n---\n\n"
+
+    return markdown
+
+markdown = await export_conversation_as_markdown("chat_abc123")
+print(markdown)
+```
+
+</CodeGroup>
+
+### Analyze Conversation
+
+Analyze conversation topics and sentiment:
+
+<CodeGroup>
+
+```typescript TypeScript
+async function analyzeConversation(sessionId: string) {
+  const session = await client.get(`/chat/completions/${sessionId}`);
+
+  const userMessages = session.messages.filter(m => m.role === 'user');
+  const assistantMessages = session.messages.filter(m => m.role === 'assistant');
+
+  const stats = {
+    totalMessages: session.messages.length,
+    userMessages: userMessages.length,
+    assistantMessages: assistantMessages.length,
+    avgMessageLength: session.messages.reduce(
+      (sum, m) => sum + m.content.length, 0
+    ) / session.messages.length,
+    duration: session.messages[session.messages.length - 1].created_at - session.created_at
+  };
+
+  return stats;
+}
+
+const analysis = await analyzeConversation('chat_abc123');
+console.log(analysis);
+```
+
+```python Python
+async def analyze_conversation(session_id: str):
+    session = client.get(f"/chat/completions/{session_id}")
+
+    user_messages = [m for m in session["messages"] if m["role"] == "user"]
+    assistant_messages = [m for m in session["messages"] if m["role"] == "assistant"]
+
+    stats = {
+        "total_messages": len(session["messages"]),
+        "user_messages": len(user_messages),
+        "assistant_messages": len(assistant_messages),
+        "avg_message_length": sum(len(m["content"]) for m in session["messages"]) / len(session["messages"]),
+        "duration": session["messages"][-1]["created_at"] - session["created_at"]
+    }
+
+    return stats
+
+analysis = await analyze_conversation("chat_abc123")
+print(analysis)
+```
+
+</CodeGroup>
+
+## Use Cases
+
+### Conversation History
+
+Show conversation history in a UI:
+
+```typescript
+async function renderConversationHistory(sessionId: string) {
+  const session = await client.get(`/chat/completions/${sessionId}`);
+
+  return session.messages.map((message, i) => ({
+    id: i,
+    role: message.role,
+    content: message.content,
+    timestamp: new Date(message.created_at * 1000)
+  }));
+}
+```
+
+### Resume After Disconnect
+
+Resume a conversation after user disconnects:
+
+```typescript
+async function resumeConversation(sessionId: string) {
+  try {
+    // Try to retrieve existing session
+    const session = await client.get(`/chat/completions/${sessionId}`);
+    console.log(`Resumed conversation with ${session.messages.length} messages`);
+    return session;
+  } catch (error) {
+    if (error.status === 404) {
+      console.log('Session not found, starting new conversation');
+      return null;
+    }
+    throw error;
+  }
+}
+```
+
+### Conversation Search
+
+Search conversations by content:
+
+```typescript
+async function searchConversations(query: string) {
+  const sessions = await client.get('/chat/completions?limit=100');
+  const matches = [];
+
+  for (const session of sessions.data) {
+    const fullSession = await client.get(`/chat/completions/${session.id}`);
+
+    const hasMatch = fullSession.messages.some(m =>
+      m.content.toLowerCase().includes(query.toLowerCase())
+    );
+
+    if (hasMatch) {
+      matches.push(fullSession);
+    }
+  }
+
+  return matches;
+}
+
+const results = await searchConversations('grassroots');
+console.log(`Found ${results.length} conversations about grassroots`);
+```
+
+## Error Responses
+
+### 401 Unauthorized
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid or expired API key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+### 404 Not Found
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Chat session not found",
+    "code": "resource_not_found"
+  }
+}
+```
+
+### 429 Too Many Requests
+
+```json
+{
+  "error": {
+    "type": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Retry after 30 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+## Pricing
+
+Retrieving sessions is **free** - no token usage.
+
+## Rate Limits
+
+| Tier | Requests per Minute |
+|------|---------------------|
+| Free | 10 |
+| Standard | 60 |
+| Premium | 300 |
+| Enterprise | Custom |
+
+## Best Practices
+
+### 1. Cache Session Data
+
+Cache retrieved sessions to reduce API calls:
+
+```typescript
+const sessionCache = new Map();
+
+async function getSessionCached(sessionId: string) {
+  if (sessionCache.has(sessionId)) {
+    return sessionCache.get(sessionId);
+  }
+
+  const session = await client.get(`/chat/completions/${sessionId}`);
+  sessionCache.set(sessionId, session);
+  return session;
+}
+```
+
+### 2. Handle 404 Errors
+
+Always handle missing sessions gracefully:
+
+```typescript
+try {
+  const session = await client.get(`/chat/completions/${sessionId}`);
+  return session;
+} catch (error) {
+  if (error.status === 404) {
+    console.log('Session not found, starting new conversation');
+    return null;
+  }
+  throw error;
+}
+```
+
+### 3. Limit Message History
+
+Trim old messages to stay under context window:
+
+```typescript
+function trimMessages(messages: any[], maxTokens = 100000) {
+  // Keep most recent messages that fit in context window
+  let totalTokens = 0;
+  const trimmed = [];
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const tokens = estimateTokens(messages[i].content);
+
+    if (totalTokens + tokens > maxTokens) {
+      break;
+    }
+
+    trimmed.unshift(messages[i]);
+    totalTokens += tokens;
+  }
+
+  return trimmed;
+}
+```
+
+### 4. Export Important Conversations
+
+Regularly export conversations for backup:
+
+```typescript
+async function backupSession(sessionId: string) {
+  const session = await client.get(`/chat/completions/${sessionId}`);
+  const markdown = await exportConversationAsMarkdown(sessionId);
+
+  // Save to file, database, or cloud storage
+  await saveToStorage(`backups/${sessionId}.md`, markdown);
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Completion" icon="message" href="/api/chat/create">
+    Create a new chat completion
+  </Card>
+
+  <Card title="List Sessions" icon="list" href="/api/chat/list">
+    List all chat sessions
+  </Card>
+
+  <Card title="Streaming" icon="bolt" href="/api/chat/streaming">
+    Use streaming for real-time responses
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

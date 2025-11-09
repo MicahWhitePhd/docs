@@ -1,0 +1,287 @@
+# Delete Video
+
+Permanently delete a video and free up storage.
+
+```http
+DELETE /v1/videos/:video_id
+```
+
+## Request
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `video_id` | string | Yes | The video ID to delete |
+
+### Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Bearer oc_live_...` | Yes |
+
+## Response
+
+### Success (200 OK)
+
+```json
+{
+  "id": "video_abc123",
+  "object": "video",
+  "deleted": true
+}
+```
+
+## Examples
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const result = await client.videos.del('video_abc123');
+
+if (result.deleted) {
+  console.log(`Video ${result.id} deleted successfully`);
+}
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+result = client.videos.delete("video_abc123")
+
+if result.deleted:
+    print(f"Video {result.id} deleted successfully")
+```
+
+```bash curl
+curl -X DELETE https://api.outcryai.com/v1/videos/video_abc123 \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+```
+
+</CodeGroup>
+
+### Batch Delete
+
+Delete multiple videos:
+
+```typescript
+async function deleteVideos(videoIds: string[]) {
+  for (const id of videoIds) {
+    try {
+      await client.videos.del(id);
+      console.log(`✓ Deleted ${id}`);
+    } catch (error: any) {
+      console.error(`✗ Failed to delete ${id}: ${error.message}`);
+    }
+  }
+}
+
+await deleteVideos(['video_abc123', 'video_def456', 'video_ghi789']);
+```
+
+### Delete Failed Videos
+
+```typescript
+const response = await client.videos.list({ limit: 100 });
+const failed = response.data.filter(v => v.status === 'failed');
+
+console.log(`Found ${failed.length} failed videos`);
+
+for (const video of failed) {
+  await client.videos.del(video.id);
+  console.log(`Deleted failed video: ${video.id}`);
+}
+```
+
+### Delete Old Videos
+
+```typescript
+async function deleteOldVideos(daysOld: number) {
+  const cutoffDate = Date.now() / 1000 - (daysOld * 86400);
+  const allVideos = await getAllVideos();
+
+  const oldVideos = allVideos.filter(v => v.created < cutoffDate);
+
+  console.log(`Found ${oldVideos.length} videos older than ${daysOld} days`);
+
+  for (const video of oldVideos) {
+    await client.videos.del(video.id);
+    console.log(`Deleted old video: ${video.id} (${new Date(video.created * 1000)})`);
+  }
+}
+
+await deleteOldVideos(30);  // Delete videos older than 30 days
+```
+
+## What Gets Deleted
+
+When you delete a video, the following are permanently removed:
+
+- ✅ Video file from R2 storage
+- ✅ Video metadata from database
+- ✅ All associated data (enhanced prompts, cost info, etc.)
+
+**Cannot be recovered after deletion!**
+
+<Warning>
+  Video deletion is **permanent** and **cannot be undone**. Make sure you have a backup if needed before deleting.
+</Warning>
+
+## Deletion and Billing
+
+### Credits Not Refunded
+
+Deleting a video does **not** refund the credits used to generate it:
+
+```typescript
+// Create video ($2.50)
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Test video',
+  seconds: '8',
+  size: '1280x720'
+});
+// Balance: -$2.50
+
+// Delete video
+await client.videos.del(video.id);
+// Balance: still -$2.50 (no refund)
+```
+
+### Storage Savings
+
+Deleting videos frees up storage space:
+
+- **R2 storage**: Videos in R2 count toward storage quota
+- **Metadata**: Reduces database usage
+- **Cost**: Saves on R2 storage fees ($0.015/GB-month)
+
+For most users, storage costs are negligible compared to generation costs.
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Video not found: video_abc123",
+    "code": "video_not_found"
+  }
+}
+```
+
+**Possible causes:**
+- Video ID doesn't exist
+- Video already deleted
+- Video belongs to different organization
+
+### 403 Forbidden
+
+```json
+{
+  "error": {
+    "type": "permission_error",
+    "message": "You don't own this video",
+    "code": "insufficient_permission"
+  }
+}
+```
+
+**Cause:** Video belongs to a different organization.
+
+**Solution:** Only delete videos owned by your organization.
+
+## Deletion Safety
+
+### Confirmation Prompt
+
+Always confirm before deletion in UI:
+
+```typescript
+async function deleteVideoWithConfirmation(videoId: string) {
+  const video = await client.videos.retrieve(videoId);
+
+  const confirmed = confirm(
+    `Delete video "${video.prompt}"?\n\n` +
+    `This action cannot be undone.`
+  );
+
+  if (!confirmed) {
+    console.log('Deletion cancelled');
+    return;
+  }
+
+  await client.videos.del(videoId);
+  console.log('Video deleted');
+}
+```
+
+### Soft Delete (Archive)
+
+Instead of deleting, archive videos by storing IDs:
+
+```typescript
+// Store archived video IDs
+const archivedVideos = new Set<string>();
+
+function archiveVideo(videoId: string) {
+  archivedVideos.add(videoId);
+  localStorage.setItem('archived', JSON.stringify([...archivedVideos]));
+  console.log(`Video ${videoId} archived (not deleted)`);
+}
+
+function getActiveVideos(allVideos: Video[]): Video[] {
+  return allVideos.filter(v => !archivedVideos.has(v.id));
+}
+
+// Archive instead of delete
+archiveVideo('video_abc123');
+
+// Later: permanently delete archived videos
+for (const id of archivedVideos) {
+  await client.videos.del(id);
+}
+```
+
+## Required Scopes
+
+This endpoint requires the following API key scopes:
+
+- `video:delete` - Delete videos
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="List Videos" icon="list" href="/api/videos/list">
+    View all your videos before deleting
+  </Card>
+
+  <Card title="Retrieve Video" icon="eye" href="/api/videos/retrieve">
+    Check video details before deletion
+  </Card>
+
+  <Card title="Create Video" icon="plus" href="/api/videos/create">
+    Generate a new video
+  </Card>
+
+  <Card title="Download Video" icon="download" href="/api/videos/download">
+    Download before deleting
+  </Card>
+</CardGroup>

@@ -1,0 +1,353 @@
+# Chat API Overview
+
+Create theory-aware conversations with AI that understands activist strategy.
+
+## Overview
+
+The Chat API provides conversational AI optimized for activists, organizers, and change-makers. Unlike generic chatbots, Outcry AI understands strategic frameworks through Theory of Change positioning.
+
+### Key Features
+
+- **Theory of Change Integration** - Align responses with your strategic approach
+- **Streaming Responses** - Real-time token-by-token output
+- **Session Management** - Multi-turn conversations with context
+- **Token-Based Billing** - Pay only for what you use ($0.08 per 1K tokens)
+- **OpenAI Compatible** - Works with OpenAI SDK
+
+## Model
+
+| Model | Context Window | Cost per 1K Tokens |
+|-------|----------------|---------------------|
+| **grok-2** | 128K tokens | $0.08 |
+
+## Quick Example
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'system', content: 'You are an expert activist mentor' },
+    { role: 'user', content: 'How do I organize a grassroots campaign?' }
+  ]
+});
+
+console.log(completion.choices[0].message.content);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[
+        {"role": "system", "content": "You are an expert activist mentor"},
+        {"role": "user", "content": "How do I organize a grassroots campaign?"}
+    ]
+)
+
+print(completion.choices[0].message.content)
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/chat/completions \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-2",
+    "messages": [
+      {"role": "user", "content": "How do I organize a grassroots campaign?"}
+    ]
+  }'
+```
+
+</CodeGroup>
+
+## Theory of Change Positioning
+
+Align AI responses with your strategic framework using the `x-theory-position` parameter:
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'How can I fight climate change?' }
+  ],
+  // @ts-ignore - Vendor extension
+  'x-theory-position': {
+    x: -0.7,  // Subjective (grassroots)
+    y: -0.5   // Material (concrete action)
+  }
+});
+
+// Response emphasizes grassroots organizing and direct action
+```
+
+**Theory Positions:**
+- **Voluntarism** `{x: -1, y: -1}` - Grassroots mobilization
+- **Structuralism** `{x: 1, y: -1}` - Policy/systems change
+- **Subjectivism** `{x: -1, y: 1}` - Cultural transformation
+- **Theurgism** `{x: 1, y: 1}` - Faith-based activism
+
+See the [Theory of Change Guide](/guides/theory-of-change) for details.
+
+## Streaming Responses
+
+Get real-time token-by-token responses:
+
+```typescript
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Explain civil disobedience' }],
+  stream: true
+});
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  process.stdout.write(content);
+}
+```
+
+Streaming provides:
+- Lower perceived latency
+- Better UX for long responses
+- Progress indication
+
+## Multi-Turn Conversations
+
+Maintain conversation context across multiple requests:
+
+### Method 1: Send Full History
+
+```typescript
+const messages = [
+  { role: 'user', content: 'What is direct action?' },
+  { role: 'assistant', content: 'Direct action is...' },
+  { role: 'user', content: 'Can you give me examples?' }
+];
+
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages
+});
+```
+
+### Method 2: Use Session ID
+
+```typescript
+// First message
+const completion1 = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'What is direct action?' }],
+  // @ts-ignore
+  session_id: 'my-conversation-123'
+});
+
+// Follow-up (references previous context)
+const completion2 = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Can you give me examples?' }],
+  // @ts-ignore
+  session_id: 'my-conversation-123'  // Same session
+});
+```
+
+## Pricing
+
+Chat is billed per token at **$0.08 per 1,000 tokens**.
+
+**Token Estimation:**
+- ~750 words = 1,000 tokens
+- Average message: 50-200 tokens
+- Typical conversation: 500-2,000 tokens ($0.04-$0.16)
+
+**Example costs:**
+```
+Question: "How do I organize?" (5 tokens)
+Answer: 200-word response (267 tokens)
+Total: 272 tokens = $0.02
+```
+
+Use token counting to estimate costs:
+
+```typescript
+import { encode } from 'gpt-tokenizer';
+
+const text = 'How do I organize a grassroots campaign?';
+const tokens = encode(text).length;
+console.log(`Tokens: ${tokens}`);  // ~8 tokens
+```
+
+## Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| **POST** | `/v1/chat/completions` | Create chat completion |
+| **GET** | `/v1/chat/completions` | List chat sessions |
+| **GET** | `/v1/chat/completions/:id` | Retrieve specific session |
+
+## Response Format
+
+```json
+{
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "To organize a grassroots campaign..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 15,
+    "completion_tokens": 150,
+    "total_tokens": 165
+  }
+}
+```
+
+## Rate Limits
+
+| Tier | Requests per Minute | Tokens per Day |
+|------|---------------------|----------------|
+| Free | 10 | 10,000 |
+| Standard | 60 | 1,000,000 |
+| Premium | 300 | 10,000,000 |
+| Enterprise | Custom | Custom |
+
+## Best Practices
+
+### 1. Use System Messages
+
+Set context with system messages:
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an expert in grassroots organizing with 20 years of experience'
+    },
+    {
+      role: 'user',
+      content: 'How do I build a coalition?'
+    }
+  ]
+});
+```
+
+### 2. Manage Context Window
+
+Keep conversations under 128K tokens:
+
+```typescript
+function trimMessages(messages: Message[], maxTokens = 100000): Message[] {
+  let totalTokens = 0;
+  const trimmed: Message[] = [];
+
+  // Keep system message
+  if (messages[0]?.role === 'system') {
+    trimmed.push(messages[0]);
+    totalTokens += encode(messages[0].content).length;
+  }
+
+  // Add messages from end (most recent first)
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === 'system') continue;
+
+    const tokens = encode(msg.content).length;
+
+    if (totalTokens + tokens > maxTokens) {
+      break;
+    }
+
+    trimmed.unshift(msg);
+    totalTokens += tokens;
+  }
+
+  return trimmed;
+}
+```
+
+### 3. Handle Long Responses
+
+Set max_tokens to control response length:
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Explain activism' }],
+  max_tokens: 500  // Limit to ~375 words
+});
+```
+
+### 4. Use Streaming for UX
+
+Stream responses for better perceived performance:
+
+```typescript
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Long question...' }],
+  stream: true
+});
+
+let fullResponse = '';
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  fullResponse += content;
+  updateUI(content);  // Update UI in real-time
+}
+```
+
+## Required Scopes
+
+Chat endpoints require the following API key scopes:
+
+- `chat:write` - Create completions
+- `chat:read` - List/retrieve sessions
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Completion" icon="message" href="/api/chat/create">
+    Create your first chat completion
+  </Card>
+
+  <Card title="Streaming" icon="bolt" href="/api/chat/streaming">
+    Use streaming for real-time responses
+  </Card>
+
+  <Card title="Theory of Change" icon="compass" href="/guides/theory-of-change">
+    Align AI with your strategic approach
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

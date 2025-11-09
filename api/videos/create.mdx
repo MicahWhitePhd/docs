@@ -1,0 +1,431 @@
+# Create Video
+
+Generate a new AI-powered video using Sora 2 or Sora 2 Pro models.
+
+```http
+POST /v1/videos
+```
+
+## Request
+
+### Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Bearer oc_live_...` | Yes |
+| `Content-Type` | `application/json` | Yes |
+
+### Body Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `model` | string | Yes | AI model to use: `"sora-2"` or `"sora-2-pro"` |
+| `prompt` | string | Yes | Video description (10-500 characters) |
+| `seconds` | string | Yes | Duration: `"4"`, `"8"`, or `"12"` (STRING!) |
+| `size` | string | Yes | Resolution: `"1280x720"`, `"720x1280"`, `"1792x1024"`, `"1024x1792"` |
+| `x-theory-position` | object | No | Theory of Change positioning: `{x: -1 to 1, y: -1 to 1}` |
+| `x-style` | string | No | Visual style preset (e.g., "cinematic", "documentary") |
+
+<Warning>
+  **Important:** The `seconds` parameter must be a STRING ("4", "8", or "12"), not a number. This is required for OpenAI SDK compatibility.
+</Warning>
+
+### Request Schema
+
+```typescript
+{
+  model: "sora-2" | "sora-2-pro";
+  prompt: string;  // 10-500 chars
+  seconds: "4" | "8" | "12";  // STRING!
+  size: "1280x720" | "720x1280" | "1792x1024" | "1024x1792";
+  "x-theory-position"?: {
+    x: number;  // -1 to 1
+    y: number;  // -1 to 1
+  };
+  "x-style"?: string;
+}
+```
+
+## Response
+
+### Success (202 Accepted)
+
+Returns the created video object with `status: "queued"`:
+
+```json
+{
+  "id": "video_abc123def456",
+  "object": "video",
+  "created": 1730634060,
+  "model": "sora-2",
+  "prompt": "Activists marching for climate justice with banners",
+  "status": "queued",
+  "progress": 0,
+  "seconds": "8",
+  "size": "1280x720",
+  "url": null,
+  "x-cost": {
+    "amount": 2.50,
+    "currency": "USD"
+  },
+  "x-enhanced-prompt": "Powerful scene of diverse climate activists..."
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique video identifier (use for polling) |
+| `object` | string | Always `"video"` |
+| `created` | integer | Unix timestamp (seconds) |
+| `model` | string | Model used for generation |
+| `prompt` | string | Original user prompt |
+| `status` | string | `"queued"`, `"in_progress"`, `"completed"`, or `"failed"` |
+| `progress` | integer | Generation progress (0-100) |
+| `seconds` | string | Video duration |
+| `size` | string | Video resolution |
+| `url` | string\|null | Video URL (null until completed) |
+| `x-cost` | object | Cost information (vendor extension) |
+| `x-enhanced-prompt` | string | AI-enhanced prompt (vendor extension) |
+
+## Examples
+
+### Basic Video Generation
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Activists marching for climate justice',
+  seconds: '8',
+  size: '1280x720'
+});
+
+console.log(`Video created: ${video.id}`);
+console.log(`Status: ${video.status}`);
+console.log(`Cost: $${video['x-cost'].amount}`);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+video = client.videos.create(
+    model="sora-2",
+    prompt="Activists marching for climate justice",
+    seconds="8",
+    size="1280x720"
+)
+
+print(f"Video created: {video.id}")
+print(f"Status: {video.status}")
+print(f"Cost: ${video.x_cost['amount']}")
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/videos \
+  -H "Authorization: Bearer oc_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "sora-2",
+    "prompt": "Activists marching for climate justice",
+    "seconds": "8",
+    "size": "1280x720"
+  }'
+```
+
+</CodeGroup>
+
+### With Theory of Change
+
+```typescript
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Community organizing meeting for housing justice',
+  seconds: '8',
+  size: '1280x720',
+  // @ts-ignore - Vendor extension
+  'x-theory-position': {
+    x: -0.7,  // Subjective (grassroots)
+    y: -0.5   // Material (concrete action)
+  }
+});
+
+// Visuals will emphasize grassroots organizing
+```
+
+### HD Portrait Video
+
+```typescript
+const video = await client.videos.create({
+  model: 'sora-2-pro',
+  prompt: 'Activist speaking at rally with crowd behind',
+  seconds: '4',
+  size: '1024x1792'  // HD portrait
+});
+
+// Cost: $6.00 (4s HD)
+```
+
+### Long Cinematic Video
+
+```typescript
+const video = await client.videos.create({
+  model: 'sora-2-pro',
+  prompt: 'Sunrise over peaceful protest encampment',
+  seconds: '12',
+  size: '1792x1024',  // HD landscape
+  // @ts-ignore
+  'x-style': 'cinematic'
+});
+
+// Cost: $22.50 (12s HD)
+```
+
+## Error Responses
+
+### 400 Bad Request - Invalid Parameters
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "seconds must be '4', '8', or '12'",
+    "param": "seconds",
+    "code": "invalid_seconds"
+  }
+}
+```
+
+**Common causes:**
+- `seconds` sent as number instead of string
+- Prompt too short (<10 chars) or too long (>500 chars)
+- Invalid `size` value
+- Invalid `model` name
+
+**Solution:** Validate parameters before sending:
+
+```typescript
+function validateVideoRequest(req: any): string[] {
+  const errors: string[] = [];
+
+  if (!['sora-2', 'sora-2-pro'].includes(req.model)) {
+    errors.push('model must be "sora-2" or "sora-2-pro"');
+  }
+
+  if (req.prompt.length < 10 || req.prompt.length > 500) {
+    errors.push('prompt must be 10-500 characters');
+  }
+
+  if (!['4', '8', '12'].includes(req.seconds)) {
+    errors.push('seconds must be "4", "8", or "12" as STRING');
+  }
+
+  const validSizes = ['1280x720', '720x1280', '1792x1024', '1024x1792'];
+  if (!validSizes.includes(req.size)) {
+    errors.push(`size must be one of: ${validSizes.join(', ')}`);
+  }
+
+  return errors;
+}
+```
+
+### 402 Payment Required - Insufficient Credits
+
+```json
+{
+  "error": {
+    "type": "insufficient_quota",
+    "message": "Insufficient prepaid balance. Required: $2.50, Available: $1.25",
+    "code": "insufficient_quota"
+  }
+}
+```
+
+**Solution:** Add credits to your account before creating videos:
+
+```typescript
+try {
+  const video = await client.videos.create({...});
+} catch (error: any) {
+  if (error.status === 402) {
+    console.error('Insufficient credits');
+    // Redirect to billing
+    window.location.href = '/billing/add-credits';
+  }
+}
+```
+
+### 422 Unprocessable Entity - Content Policy Violation
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Content violates our usage policies",
+    "code": "content_policy_violation"
+  }
+}
+```
+
+**Solution:** Revise your prompt to comply with usage policies. Common issues:
+- Violence or illegal activities
+- Explicit content
+- Hate speech
+- Misinformation
+
+### 429 Too Many Requests - Rate Limit Exceeded
+
+```json
+{
+  "error": {
+    "type": "rate_limit_error",
+    "message": "Rate limit exceeded. Please try again in 42 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Solution:** Implement exponential backoff:
+
+```typescript
+async function createVideoWithRetry(
+  params: VideoCreateParams,
+  maxRetries = 3
+): Promise<Video> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.videos.create(params);
+    } catch (error: any) {
+      if (error.status === 429 && attempt < maxRetries - 1) {
+        const delay = Math.pow(2, attempt) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+## Polling for Completion
+
+After creating a video, poll the status endpoint until completion:
+
+```typescript
+async function waitForVideo(videoId: string): Promise<Video> {
+  while (true) {
+    // Wait 5 seconds between polls
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    const video = await client.videos.retrieve(videoId);
+
+    console.log(`Progress: ${video.progress}%`);
+
+    if (video.status === 'completed') {
+      return video;
+    }
+
+    if (video.status === 'failed') {
+      throw new Error(`Video failed: ${video.error}`);
+    }
+
+    // Continue polling for queued/in_progress
+  }
+}
+
+const video = await client.videos.create({...});
+const completed = await waitForVideo(video.id);
+console.log(`Video URL: ${completed.url}`);
+```
+
+<Tip>
+  **Better approach:** Use webhooks instead of polling! Set up a webhook to receive `video.completed` events. See the [Webhooks Guide](/guides/webhooks).
+</Tip>
+
+## Cost Calculation
+
+Videos are charged based on model, duration, and resolution:
+
+```typescript
+function calculateVideoCost(
+  model: 'sora-2' | 'sora-2-pro',
+  seconds: '4' | '8' | '12',
+  size: string
+): number {
+  const isHD = size === '1792x1024' || size === '1024x1792';
+
+  if (model === 'sora-2') {
+    // Standard model (no HD)
+    return seconds === '4' ? 1.25 : seconds === '8' ? 2.50 : 3.75;
+  }
+
+  if (isHD) {
+    // Sora 2 Pro HD
+    return seconds === '4' ? 6.00 : seconds === '8' ? 15.00 : 22.50;
+  }
+
+  // Sora 2 Pro Standard
+  return seconds === '4' ? 3.50 : seconds === '8' ? 7.00 : 10.50;
+}
+
+const cost = calculateVideoCost('sora-2', '8', '1280x720');
+console.log(`Estimated cost: $${cost}`);  // $2.50
+```
+
+## Video Generation Timeline
+
+Typical timeline for video generation:
+
+1. **Request sent** (t=0s) - Returns immediately with `status: "queued"`
+2. **Processing starts** (t=5-10s) - Status changes to `"in_progress"`
+3. **Generation completes** (t=60-90s) - Status changes to `"completed"`, URL available
+4. **R2 persistence** (t=45min) - Video persisted to permanent storage
+5. **OpenAI expiration** (t=1hr) - Original OpenAI URL expires (R2 URL still works)
+
+<Info>
+  Videos take 60-90 seconds to generate on average. Poll every 5 seconds for status updates.
+</Info>
+
+## Required Scopes
+
+This endpoint requires the following API key scopes:
+
+- `video:write` - Create videos
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Retrieve Video" icon="eye" href="/api/videos/retrieve">
+    Check video generation status
+  </Card>
+
+  <Card title="List Videos" icon="list" href="/api/videos/list">
+    List all your videos
+  </Card>
+
+  <Card title="Download Video" icon="download" href="/api/videos/download">
+    Download the completed video file
+  </Card>
+
+  <Card title="Set Up Webhooks" icon="webhook" href="/guides/webhooks">
+    Get notified when videos complete
+  </Card>
+</CardGroup>

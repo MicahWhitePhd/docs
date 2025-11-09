@@ -1,0 +1,162 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Outcry AI API",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#8B5CF6",
+    "light": "#A78BFA",
+    "dark": "#7C3AED",
+    "anchors": {
+      "from": "#8B5CF6",
+      "to": "#6D28D9"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Dashboard",
+      "url": "https://www.outcryai.com"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Get API Key",
+    "url": "https://www.outcryai.com/register"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api"
+    },
+    {
+      "name": "Guides",
+      "url": "guides"
+    },
+    {
+      "name": "Examples",
+      "url": "examples"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "Community",
+      "icon": "discord",
+      "url": "https://discord.gg/outcryai"
+    },
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/outcryai"
+    },
+    {
+      "name": "Support",
+      "icon": "envelope",
+      "url": "mailto:support@outcryai.com"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "quickstart"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/authentication",
+        "guides/webhooks",
+        "guides/theory-of-change",
+        "guides/error-handling",
+        "guides/rate-limits",
+        "guides/best-practices"
+      ]
+    },
+    {
+      "group": "Video API",
+      "pages": [
+        "api/videos/overview",
+        "api/videos/create",
+        "api/videos/retrieve",
+        "api/videos/list",
+        "api/videos/delete",
+        "api/videos/download",
+        "api/videos/remix"
+      ]
+    },
+    {
+      "group": "Chat API",
+      "pages": [
+        "api/chat/overview",
+        "api/chat/create",
+        "api/chat/streaming",
+        "api/chat/list",
+        "api/chat/retrieve"
+      ]
+    },
+    {
+      "group": "Text API",
+      "pages": [
+        "api/text/overview",
+        "api/text/create"
+      ]
+    },
+    {
+      "group": "Webhooks API",
+      "pages": [
+        "api/webhooks/overview",
+        "api/webhooks/create",
+        "api/webhooks/retrieve",
+        "api/webhooks/list",
+        "api/webhooks/update",
+        "api/webhooks/delete",
+        "api/webhooks/test"
+      ]
+    },
+    {
+      "group": "Examples",
+      "pages": [
+        "examples/video-generation",
+        "examples/chat-completions",
+        "examples/webhooks",
+        "examples/theory-of-change",
+        "examples/error-handling",
+        "examples/nextjs-integration",
+        "examples/python-flask"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "twitter": "https://twitter.com/outcryai",
+    "github": "https://github.com/outcryai",
+    "discord": "https://discord.gg/outcryai"
+  },
+  "api": {
+    "baseUrl": "https://api.outcryai.com/v1",
+    "auth": {
+      "method": "bearer"
+    },
+    "playground": {
+      "mode": "show"
+    }
+  },
+  "openapi": [
+    "https://api.outcryai.com/v1/openapi.json"
+  ],
+  "feedback": {
+    "thumbsRating": true,
+    "suggestEdit": true,
+    "raiseIssue": true
+  },
+  "search": {
+    "prompt": "Search docs..."
+  },
+  "analytics": {
+    "plausible": {
+      "domain": "docs.outcryai.com"
+    }
+  }
+}

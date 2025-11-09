@@ -1,43 +1,85 @@
-# Mintlify Starter Kit
+# Outcry AI API Documentation
 
-Use the starter kit to get your docs deployed and ready to customize.
+Official API documentation for Outcry AI - The AI-powered activist mentor platform.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+🔗 **Live Docs**: [docs.outcryai.com](https://docs.outcryai.com)
+🔑 **Get API Key**: [www.outcryai.com/register](https://www.outcryai.com/register)
+🌐 **Main Site**: [www.outcryai.com](https://www.outcryai.com)
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+## Overview
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+This repository contains the complete API documentation for Outcry AI, built with [Mintlify](https://mintlify.com).
+
+Our API provides:
+- **Chat API** - AI-powered activist guidance with theory of change customization
+- **Video API** - AI video generation with Sora 2 models
+- **Text API** - Single-shot text completions
+- **Webhooks** - Real-time event notifications
+
+## 100% OpenAI Compatible
+
+The Outcry AI API is designed to be 100% compatible with OpenAI's API format. Simply change the base URL:
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'oc_live_...',
+  baseURL: 'https://api.outcryai.com/v1'  // Only difference!
+});
+```
+
+## Documentation Structure
+
+- **`/api`** - Complete API reference for all endpoints
+  - `/api/chat` - Chat completions
+  - `/api/text` - Text completions
+  - `/api/videos` - Video generation
+  - `/api/webhooks` - Webhook management
+- **`/guides`** - Implementation guides
+  - Authentication
+  - Webhooks
+  - Theory of Change
+  - Error handling
+  - Rate limiting
+  - Best practices
+- **`/examples`** - Code examples
+  - Video generation
+  - Chat completions
+  - Webhook setup
+  - Framework integrations
 
 ## Development
 
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+This documentation is built with Mintlify and automatically deploys when changes are pushed to the main branch.
 
+### Local Preview
+
+```bash
+# Install Mintlify CLI
+npm i -g mintlify
+
+# Preview docs locally
+mintlify dev
 ```
-npm i -g mint
-```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+### Contributing
 
-```
-mint dev
-```
+Documentation improvements are welcome! Please:
+1. Fork this repository
+2. Make your changes
+3. Submit a pull request
 
-View your local preview at `http://localhost:3000`.
+## Support
 
-## Publishing changes
+- **Documentation Issues**: [GitHub Issues](https://github.com/micahwhitephd/docs/issues)
+- **API Support**: support@outcryai.com
+- **Community**: [Discord](https://discord.gg/outcryai)
 
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
+## License
 
-## Need help?
+Documentation is licensed under MIT. See [LICENSE](LICENSE) for details.
 
-### Troubleshooting
+---
 
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
-
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+Built with ❤️ by the Outcry AI team

@@ -1,0 +1,987 @@
+# Webhooks
+
+Receive real-time notifications when events occur in your Outcry AI account. Webhooks eliminate the need for polling and provide instant updates when videos complete, fail, or change status.
+
+## Overview
+
+Webhooks are HTTP POST requests sent to your server when specific events occur. Instead of repeatedly checking video status with API calls, Outcry AI notifies you immediately when something happens.
+
+### Benefits
+
+- **Real-time updates**: Instant notifications without polling
+- **Reduced API calls**: Save on rate limits and improve performance
+- **Event-driven architecture**: Build reactive systems
+- **Reliable delivery**: Automatic retries with exponential backoff
+
+### How Webhooks Work
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Outcry AI
+    participant Your Server
+
+    Client->>Outcry AI: POST /v1/videos (create video)
+    Outcry AI->>Client: 200 OK {id, status: "queued"}
+
+    Note over Outcry AI: Video processing (60-90s)
+
+    Outcry AI->>Your Server: POST webhook (video.completed)
+    Your Server->>Outcry AI: 200 OK
+
+    Note over Your Server: Process video URL, update database
+```
+
+## Webhook Events
+
+| Event Type | Description | When Triggered |
+|------------|-------------|----------------|
+| `video.completed` | Video generation succeeded | Video is ready to download |
+| `video.failed` | Video generation failed | Error occurred during processing |
+| `video.processing` | Video processing started | Video moved from queued to processing |
+
+<Info>
+  More event types (chat completions, text generation) will be added in future releases.
+</Info>
+
+## Creating a Webhook
+
+### 1. Create Webhook Endpoint
+
+Create an HTTP POST endpoint on your server to receive webhook events:
+
+<CodeGroup>
+
+```typescript Next.js API Route
+// app/api/webhooks/outcry/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
+
+export async function POST(req: NextRequest) {
+  try {
+    // 1. Get raw body for signature verification
+    const rawBody = await req.text();
+    const signature = req.headers.get('x-outcry-signature');
+
+    if (!signature) {
+      return NextResponse.json(
+        { error: 'Missing signature' },
+        { status: 401 }
+      );
+    }
+
+    // 2. Verify signature
+    const secret = process.env.OUTCRY_WEBHOOK_SECRET!;
+    const isValid = verifySignature(rawBody, signature, secret);
+
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    // 3. Parse event
+    const event = JSON.parse(rawBody);
+    console.log('Received webhook:', event.type, event.id);
+
+    // 4. Handle event
+    switch (event.type) {
+      case 'video.completed':
+        await handleVideoCompleted(event.data);
+        break;
+      case 'video.failed':
+        await handleVideoFailed(event.data);
+        break;
+      case 'video.processing':
+        await handleVideoProcessing(event.data);
+        break;
+      default:
+        console.log('Unknown event type:', event.type);
+    }
+
+    // 5. Return 200 to acknowledge receipt
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 500 }
+    );
+  }
+}
+
+function verifySignature(
+  payload: string,
+  signature: string,
+  secret: string
+): boolean {
+  // Parse signature: "t=timestamp,v1=signature"
+  const parts = signature.split(',');
+  const timestamp = parts.find(p => p.startsWith('t='))?.split('=')[1];
+  const sig = parts.find(p => p.startsWith('v1='))?.split('=')[1];
+
+  if (!timestamp || !sig) return false;
+
+  // Check timestamp (reject if >5 minutes old)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) {
+    console.error('Timestamp too old');
+    return false;
+  }
+
+  // Verify HMAC signature
+  const signedPayload = `${timestamp}.${payload}`;
+  const expectedSig = crypto
+    .createHmac('sha256', secret)
+    .update(signedPayload)
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(sig),
+    Buffer.from(expectedSig)
+  );
+}
+
+async function handleVideoCompleted(video: any) {
+  console.log('Video completed:', video.id);
+  console.log('Video URL:', video.url);
+
+  // Update your database
+  // await db.videos.update(video.id, { status: 'completed', url: video.url });
+
+  // Send notification to user
+  // await sendEmail(video.userId, 'Your video is ready!');
+}
+
+async function handleVideoFailed(video: any) {
+  console.log('Video failed:', video.id);
+  console.error('Error:', video.error);
+
+  // Update database and notify user
+  // await db.videos.update(video.id, { status: 'failed', error: video.error });
+}
+
+async function handleVideoProcessing(video: any) {
+  console.log('Video processing:', video.id, `${video.progress}%`);
+
+  // Update progress in UI
+  // await broadcast(video.userId, { videoId: video.id, progress: video.progress });
+}
+```
+
+```python Flask
+from flask import Flask, request, jsonify
+import hmac
+import hashlib
+import time
+
+app = Flask(__name__)
+
+@app.route('/webhooks/outcry', methods=['POST'])
+def handle_webhook():
+    try:
+        # 1. Get raw body for signature verification
+        raw_body = request.get_data(as_text=True)
+        signature = request.headers.get('X-Outcry-Signature')
+
+        if not signature:
+            return jsonify({'error': 'Missing signature'}), 401
+
+        # 2. Verify signature
+        secret = os.environ.get('OUTCRY_WEBHOOK_SECRET')
+        if not verify_signature(raw_body, signature, secret):
+            return jsonify({'error': 'Invalid signature'}), 401
+
+        # 3. Parse event
+        event = request.get_json()
+        print(f"Received webhook: {event['type']} {event['id']}")
+
+        # 4. Handle event
+        if event['type'] == 'video.completed':
+            handle_video_completed(event['data'])
+        elif event['type'] == 'video.failed':
+            handle_video_failed(event['data'])
+        elif event['type'] == 'video.processing':
+            handle_video_processing(event['data'])
+
+        # 5. Return 200 to acknowledge receipt
+        return jsonify({'received': True}), 200
+
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return jsonify({'error': 'Webhook processing failed'}), 500
+
+def verify_signature(payload, signature, secret):
+    # Parse signature: "t=timestamp,v1=signature"
+    parts = dict(p.split('=') for p in signature.split(','))
+    timestamp = parts.get('t')
+    sig = parts.get('v1')
+
+    if not timestamp or not sig:
+        return False
+
+    # Check timestamp (reject if >5 minutes old)
+    now = int(time.time())
+    if abs(now - int(timestamp)) > 300:
+        print("Timestamp too old")
+        return False
+
+    # Verify HMAC signature
+    signed_payload = f"{timestamp}.{payload}"
+    expected_sig = hmac.new(
+        secret.encode(),
+        signed_payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    return hmac.compare_digest(sig, expected_sig)
+
+def handle_video_completed(video):
+    print(f"Video completed: {video['id']}")
+    print(f"Video URL: {video['url']}")
+    # Update database, send notification, etc.
+
+def handle_video_failed(video):
+    print(f"Video failed: {video['id']}")
+    print(f"Error: {video['error']}")
+    # Update database, notify user, etc.
+
+def handle_video_processing(video):
+    print(f"Video processing: {video['id']} {video['progress']}%")
+    # Update UI progress, etc.
+```
+
+```javascript Express.js
+const express = require('express');
+const crypto = require('crypto');
+
+const app = express();
+
+// IMPORTANT: Use raw body for signature verification
+app.post('/webhooks/outcry',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    try {
+      // 1. Get raw body for signature verification
+      const rawBody = req.body.toString('utf8');
+      const signature = req.headers['x-outcry-signature'];
+
+      if (!signature) {
+        return res.status(401).json({ error: 'Missing signature' });
+      }
+
+      // 2. Verify signature
+      const secret = process.env.OUTCRY_WEBHOOK_SECRET;
+      const isValid = verifySignature(rawBody, signature, secret);
+
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid signature' });
+      }
+
+      // 3. Parse event
+      const event = JSON.parse(rawBody);
+      console.log('Received webhook:', event.type, event.id);
+
+      // 4. Handle event
+      switch (event.type) {
+        case 'video.completed':
+          await handleVideoCompleted(event.data);
+          break;
+        case 'video.failed':
+          await handleVideoFailed(event.data);
+          break;
+        case 'video.processing':
+          await handleVideoProcessing(event.data);
+          break;
+      }
+
+      // 5. Return 200 to acknowledge receipt
+      res.json({ received: true });
+    } catch (error) {
+      console.error('Webhook error:', error);
+      res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  }
+);
+
+function verifySignature(payload, signature, secret) {
+  // Parse signature: "t=timestamp,v1=signature"
+  const parts = signature.split(',').reduce((acc, part) => {
+    const [key, value] = part.split('=');
+    acc[key] = value;
+    return acc;
+  }, {});
+
+  const timestamp = parts.t;
+  const sig = parts.v1;
+
+  if (!timestamp || !sig) return false;
+
+  // Check timestamp (reject if >5 minutes old)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - parseInt(timestamp)) > 300) {
+    console.error('Timestamp too old');
+    return false;
+  }
+
+  // Verify HMAC signature
+  const signedPayload = `${timestamp}.${payload}`;
+  const expectedSig = crypto
+    .createHmac('sha256', secret)
+    .update(signedPayload)
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(sig),
+    Buffer.from(expectedSig)
+  );
+}
+
+async function handleVideoCompleted(video) {
+  console.log('Video completed:', video.id);
+  console.log('Video URL:', video.url);
+  // Update database, send notification, etc.
+}
+
+async function handleVideoFailed(video) {
+  console.log('Video failed:', video.id);
+  console.error('Error:', video.error);
+  // Update database, notify user, etc.
+}
+
+async function handleVideoProcessing(video) {
+  console.log('Video processing:', video.id, `${video.progress}%`);
+  // Update UI progress, etc.
+}
+
+app.listen(3000, () => console.log('Webhook server running on port 3000'));
+```
+
+</CodeGroup>
+
+### 2. Register Webhook
+
+Register your webhook endpoint with the Outcry AI API:
+
+<CodeGroup>
+
+```bash curl
+curl https://api.outcryai.com/v1/webhooks \
+  -H "Authorization: Bearer oc_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://yourdomain.com/api/webhooks/outcry",
+    "events": ["video.completed", "video.failed"],
+    "description": "Production webhook"
+  }'
+
+# Response:
+{
+  "id": "wh_abc123def456",
+  "object": "webhook",
+  "url": "https://yourdomain.com/api/webhooks/outcry",
+  "events": ["video.completed", "video.failed"],
+  "secret": "whsec_xyz789...",  # SAVE THIS!
+  "is_active": true,
+  "created": 1730634060,
+  "last_success_at": null,
+  "failure_count": 0
+}
+```
+
+```typescript TypeScript
+const response = await fetch('https://api.outcryai.com/v1/webhooks', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer oc_live_abc123def456...',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    url: 'https://yourdomain.com/api/webhooks/outcry',
+    events: ['video.completed', 'video.failed'],
+    description: 'Production webhook'
+  })
+});
+
+const webhook = await response.json();
+console.log('Webhook created:', webhook.id);
+console.log('Secret:', webhook.secret);  // SAVE THIS!
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://api.outcryai.com/v1/webhooks',
+    headers={
+        'Authorization': 'Bearer oc_live_abc123def456...',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'url': 'https://yourdomain.com/api/webhooks/outcry',
+        'events': ['video.completed', 'video.failed'],
+        'description': 'Production webhook'
+    }
+)
+
+webhook = response.json()
+print(f"Webhook created: {webhook['id']}")
+print(f"Secret: {webhook['secret']}")  # SAVE THIS!
+```
+
+</CodeGroup>
+
+<Warning>
+  The webhook secret (`whsec_...`) is shown **only once** when you create the webhook. Store it securely as an environment variable - you'll need it to verify webhook signatures.
+</Warning>
+
+### 3. Store Webhook Secret
+
+Add the webhook secret to your environment variables:
+
+```bash
+OUTCRY_WEBHOOK_SECRET=whsec_xyz789...
+```
+
+## Event Payload Format
+
+All webhook events follow a consistent structure:
+
+```typescript
+interface WebhookEvent {
+  id: string;           // Event ID (e.g., "evt_abc123")
+  type: string;         // Event type (e.g., "video.completed")
+  created: number;      // Unix timestamp
+  data: object;         // Event-specific data
+}
+```
+
+### video.completed
+
+Sent when a video finishes generating successfully:
+
+```json
+{
+  "id": "evt_abc123def456",
+  "type": "video.completed",
+  "created": 1730634060,
+  "data": {
+    "id": "video_xyz789",
+    "object": "video",
+    "created": 1730634000,
+    "model": "sora-2",
+    "prompt": "Activists marching for climate justice",
+    "status": "completed",
+    "progress": 100,
+    "url": "https://pub-...r2.dev/videos/2025/11/xyz789.mp4",
+    "seconds": "8",
+    "size": "1280x720",
+    "cost": {
+      "amount": 2.50,
+      "currency": "USD"
+    }
+  }
+}
+```
+
+### video.failed
+
+Sent when a video fails to generate:
+
+```json
+{
+  "id": "evt_abc123def456",
+  "type": "video.failed",
+  "created": 1730634060,
+  "data": {
+    "id": "video_xyz789",
+    "object": "video",
+    "created": 1730634000,
+    "model": "sora-2",
+    "prompt": "...",
+    "status": "failed",
+    "progress": 45,
+    "url": null,
+    "error": {
+      "code": "content_policy_violation",
+      "message": "Content violates our usage policies"
+    }
+  }
+}
+```
+
+### video.processing
+
+Sent when a video starts processing (optional event):
+
+```json
+{
+  "id": "evt_abc123def456",
+  "type": "video.processing",
+  "created": 1730634060,
+  "data": {
+    "id": "video_xyz789",
+    "object": "video",
+    "created": 1730634000,
+    "model": "sora-2",
+    "prompt": "...",
+    "status": "in_progress",
+    "progress": 15,
+    "url": null
+  }
+}
+```
+
+## Signature Verification
+
+**All webhook requests are signed** using HMAC-SHA256 to ensure they're from Outcry AI. Always verify signatures before processing events.
+
+### Signature Format
+
+The `X-Outcry-Signature` header contains a timestamp and signature:
+
+```
+X-Outcry-Signature: t=1730634060,v1=5f7b8a9c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9
+```
+
+- `t` - Unix timestamp when the webhook was sent
+- `v1` - HMAC-SHA256 signature of `{timestamp}.{raw_body}`
+
+### Verification Steps
+
+1. **Parse signature header** to extract timestamp and signature
+2. **Check timestamp** - reject if >5 minutes old (prevents replay attacks)
+3. **Compute expected signature** using HMAC-SHA256(secret, `{timestamp}.{raw_body}`)
+4. **Compare signatures** using constant-time comparison (prevents timing attacks)
+
+### Example Verification Code
+
+```typescript
+import crypto from 'crypto';
+
+function verifyWebhookSignature(
+  rawBody: string,
+  signature: string,
+  secret: string,
+  toleranceSeconds = 300
+): boolean {
+  // Parse signature: "t=timestamp,v1=signature"
+  const parts = signature.split(',').reduce((acc, part) => {
+    const [key, value] = part.split('=');
+    acc[key] = value;
+    return acc;
+  }, {} as Record<string, string>);
+
+  const timestamp = parts.t;
+  const sig = parts.v1;
+
+  if (!timestamp || !sig) {
+    throw new Error('Invalid signature format');
+  }
+
+  // Step 1: Check timestamp (prevent replay attacks)
+  const now = Math.floor(Date.now() / 1000);
+  const age = Math.abs(now - parseInt(timestamp));
+
+  if (age > toleranceSeconds) {
+    throw new Error(`Timestamp too old: ${age}s (tolerance: ${toleranceSeconds}s)`);
+  }
+
+  // Step 2: Compute expected signature
+  const signedPayload = `${timestamp}.${rawBody}`;
+  const expectedSig = crypto
+    .createHmac('sha256', secret)
+    .update(signedPayload, 'utf8')
+    .digest('hex');
+
+  // Step 3: Compare using constant-time comparison (prevents timing attacks)
+  const isValid = crypto.timingSafeEqual(
+    Buffer.from(sig, 'hex'),
+    Buffer.from(expectedSig, 'hex')
+  );
+
+  return isValid;
+}
+```
+
+<Warning>
+  **Always verify signatures!** Unverified webhooks are a security risk. Attackers could send fake events to your endpoint.
+</Warning>
+
+## Webhook Delivery & Retries
+
+### Delivery Requirements
+
+For a webhook delivery to succeed:
+- Your endpoint must return HTTP 200-299 status code
+- Response must be received within 30 seconds
+- SSL/TLS certificate must be valid (no self-signed certs in production)
+
+### Retry Logic
+
+If delivery fails, Outcry AI automatically retries with exponential backoff:
+
+| Attempt | Delay | Total Time |
+|---------|-------|------------|
+| 1 | Immediate | 0s |
+| 2 | 1 second | 1s |
+| 3 | 5 seconds | 6s |
+| 4 | 25 seconds | 31s |
+
+After 3 failed attempts, the delivery is marked as failed.
+
+### Automatic Disable
+
+Webhooks that fail **10 consecutive times** are automatically disabled to prevent wasting resources. You'll need to manually re-enable them from your dashboard after fixing the issue.
+
+### Monitoring Webhook Health
+
+Check webhook status:
+
+```bash
+curl https://api.outcryai.com/v1/webhooks/wh_abc123 \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+
+# Response:
+{
+  "id": "wh_abc123",
+  "url": "https://yourdomain.com/api/webhooks/outcry",
+  "is_active": true,
+  "last_success_at": 1730638800,
+  "last_failure_at": null,
+  "failure_count": 0
+}
+```
+
+## Testing Webhooks
+
+### Test Event API
+
+Send a test event to verify your webhook is working:
+
+```bash
+curl https://api.outcryai.com/v1/webhooks/wh_abc123/test \
+  -X POST \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+
+# Response:
+{
+  "success": true,
+  "status_code": 200,
+  "response_time_ms": 145,
+  "delivered_at": 1730634060
+}
+```
+
+This sends a `video.completed` test event with fake data.
+
+### Local Testing with ngrok
+
+For local development, use [ngrok](https://ngrok.com/) to expose your local server:
+
+```bash
+# Start your webhook server
+npm run dev  # Runs on http://localhost:3000
+
+# In another terminal, start ngrok
+ngrok http 3000
+
+# Copy the HTTPS URL (e.g., https://abc123.ngrok.io)
+# Register webhook with ngrok URL
+curl https://api.outcryai.com/v1/webhooks \
+  -H "Authorization: Bearer oc_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://abc123.ngrok.io/api/webhooks/outcry",
+    "events": ["video.completed"],
+    "description": "Local testing"
+  }'
+
+# Create a video to trigger webhook
+curl https://api.outcryai.com/v1/videos \
+  -H "Authorization: Bearer oc_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{"model": "sora-2", "prompt": "Test video", "seconds": "4", "size": "1280x720"}'
+
+# Watch ngrok inspector: http://localhost:4040
+```
+
+## Managing Webhooks
+
+### List All Webhooks
+
+```bash
+curl https://api.outcryai.com/v1/webhooks \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+
+# Response:
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "wh_abc123",
+      "url": "https://yourdomain.com/webhooks/outcry",
+      "events": ["video.completed", "video.failed"],
+      "is_active": true,
+      "created": 1730634000
+    },
+    ...
+  ]
+}
+```
+
+### Update Webhook
+
+```bash
+curl https://api.outcryai.com/v1/webhooks/wh_abc123 \
+  -X PATCH \
+  -H "Authorization: Bearer oc_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": ["video.completed", "video.failed", "video.processing"],
+    "is_active": true
+  }'
+```
+
+### Delete Webhook
+
+```bash
+curl https://api.outcryai.com/v1/webhooks/wh_abc123 \
+  -X DELETE \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+
+# Response:
+{
+  "id": "wh_abc123",
+  "deleted": true
+}
+```
+
+## Best Practices
+
+### 1. Respond Quickly
+
+Return HTTP 200 immediately, **then** process the event:
+
+```typescript
+export async function POST(req: NextRequest) {
+  const event = await req.json();
+
+  // Acknowledge receipt immediately
+  const response = NextResponse.json({ received: true });
+
+  // Process asynchronously (don't await)
+  processWebhookAsync(event).catch(err => {
+    console.error('Async processing failed:', err);
+  });
+
+  return response;
+}
+
+async function processWebhookAsync(event: any) {
+  // Heavy processing here (database updates, external API calls, etc.)
+  await updateDatabase(event);
+  await sendNotifications(event);
+}
+```
+
+### 2. Implement Idempotency
+
+Handle duplicate events gracefully (network issues may cause retries):
+
+```typescript
+const processedEvents = new Set<string>();
+
+async function handleWebhook(event: WebhookEvent) {
+  // Check if already processed
+  if (processedEvents.has(event.id)) {
+    console.log('Duplicate event, skipping:', event.id);
+    return;
+  }
+
+  // Or check database
+  const exists = await db.webhookEvents.findUnique({ where: { id: event.id } });
+  if (exists) {
+    return;
+  }
+
+  // Process event
+  await processEvent(event);
+
+  // Mark as processed
+  processedEvents.add(event.id);
+  await db.webhookEvents.create({ data: { id: event.id, processedAt: new Date() } });
+}
+```
+
+### 3. Use Separate Webhooks per Environment
+
+Don't mix production and development webhooks:
+
+| Environment | URL | Events |
+|------------|-----|--------|
+| Production | `https://api.yourapp.com/webhooks/outcry` | All events |
+| Staging | `https://staging.yourapp.com/webhooks/outcry` | All events |
+| Development | `https://abc123.ngrok.io/webhooks/outcry` | Test events only |
+
+### 4. Monitor Webhook Health
+
+Set up alerts for webhook failures:
+
+```typescript
+async function handleWebhook(event: WebhookEvent) {
+  try {
+    await processEvent(event);
+  } catch (error) {
+    console.error('Webhook processing failed:', error);
+
+    // Alert if multiple failures
+    const failures = await getRecentFailures();
+    if (failures > 5) {
+      await alertOps('Webhook endpoint failing repeatedly!');
+    }
+
+    throw error;  // Return 500 to trigger retry
+  }
+}
+```
+
+### 5. Validate Event Data
+
+Don't trust webhook data blindly:
+
+```typescript
+function validateVideoEvent(data: any): boolean {
+  return (
+    typeof data.id === 'string' &&
+    typeof data.status === 'string' &&
+    ['queued', 'in_progress', 'completed', 'failed'].includes(data.status) &&
+    (data.url === null || typeof data.url === 'string')
+  );
+}
+
+async function handleVideoCompleted(data: any) {
+  if (!validateVideoEvent(data)) {
+    console.error('Invalid video data:', data);
+    return;  // Don't process invalid data
+  }
+
+  // Process valid data
+  await updateDatabase(data);
+}
+```
+
+### 6. Log Everything
+
+Keep detailed logs for debugging:
+
+```typescript
+async function handleWebhook(req: NextRequest) {
+  const startTime = Date.now();
+  const signature = req.headers.get('x-outcry-signature');
+  const rawBody = await req.text();
+
+  console.log('[WEBHOOK] Received', {
+    signature: signature?.substring(0, 20) + '...',
+    bodyLength: rawBody.length,
+    timestamp: new Date().toISOString()
+  });
+
+  try {
+    // Verify & process...
+    const event = JSON.parse(rawBody);
+
+    console.log('[WEBHOOK] Processing', {
+      eventId: event.id,
+      eventType: event.type,
+      dataId: event.data.id
+    });
+
+    await processEvent(event);
+
+    console.log('[WEBHOOK] Success', {
+      eventId: event.id,
+      duration: Date.now() - startTime
+    });
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error('[WEBHOOK] Error', {
+      error: error.message,
+      stack: error.stack,
+      duration: Date.now() - startTime
+    });
+
+    return NextResponse.json(
+      { error: 'Processing failed' },
+      { status: 500 }
+    );
+  }
+}
+```
+
+## Troubleshooting
+
+### Webhook Not Receiving Events
+
+**Possible causes:**
+- Webhook URL is incorrect or unreachable
+- SSL certificate is invalid
+- Firewall blocking incoming requests
+- Endpoint returning non-200 status code
+- Webhook disabled due to failures
+
+**Solutions:**
+1. Test webhook with test event API
+2. Check webhook status for `failure_count`
+3. Verify URL is publicly accessible
+4. Check SSL certificate validity
+5. Review server logs for errors
+6. Re-enable if auto-disabled
+
+### Signature Verification Failing
+
+**Possible causes:**
+- Using wrong webhook secret
+- Modifying request body before verification
+- Timestamp too old (>5 minutes)
+- Using parsed JSON instead of raw body
+
+**Solutions:**
+1. Verify you're using correct `whsec_...` secret
+2. Verify signature against raw body (before JSON.parse)
+3. Check system clock is correct
+4. Use constant-time comparison for security
+
+### Duplicate Events
+
+**Possible causes:**
+- Network issues causing retries
+- Not implementing idempotency
+- Multiple webhooks registered for same events
+
+**Solutions:**
+1. Check event ID and skip duplicates
+2. Store processed event IDs in database
+3. Review registered webhooks, delete duplicates
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Video API" icon="video" href="/api/videos">
+    Learn how to create videos that trigger webhooks
+  </Card>
+
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    Understand webhook secret management
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle webhook errors gracefully
+  </Card>
+
+  <Card title="Examples" icon="code" href="/examples/webhooks">
+    See complete webhook integration examples
+  </Card>
+</CardGroup>

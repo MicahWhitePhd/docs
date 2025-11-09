@@ -1,0 +1,545 @@
+# Create Chat Completion
+
+Create a chat completion with AI that understands activist strategy.
+
+<Note>This endpoint is 100% OpenAI SDK compatible. Just change the base URL!</Note>
+
+## Endpoint
+
+```
+POST https://api.outcryai.com/v1/chat/completions
+```
+
+## Required Scopes
+
+- `chat:write` - Create chat completions
+
+## Request Body
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `model` | string | Yes | Model ID: `"grok-2"` |
+| `messages` | array | Yes | Array of message objects (see below) |
+| `stream` | boolean | No | Enable streaming responses (default: `false`) |
+| `temperature` | number | No | Randomness (0-2, default: 1) |
+| `max_tokens` | number | No | Maximum completion tokens |
+| `session_id` | string | No | Session ID for multi-turn conversations |
+| `x-theory-position` | object | No | Theory of Change position `{x, y}` |
+
+### Message Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `role` | string | `"system"`, `"user"`, or `"assistant"` |
+| `content` | string | Message text content |
+
+## Response
+
+### Non-Streaming Response
+
+```json
+{
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "To organize a grassroots campaign..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 15,
+    "completion_tokens": 150,
+    "total_tokens": 165
+  },
+  "session_id": "chat_abc123"
+}
+```
+
+### Streaming Response
+
+When `stream: true`, returns Server-Sent Events (SSE):
+
+```json
+data: {"id":"chatcmpl_abc123","object":"chat.completion.chunk","created":1730634060,"model":"grok-2","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl_abc123","object":"chat.completion.chunk","created":1730634060,"model":"grok-2","choices":[{"index":0,"delta":{"content":"To"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl_abc123","object":"chat.completion.chunk","created":1730634060,"model":"grok-2","choices":[{"index":0,"delta":{"content":" organize"},"finish_reason":null}]}
+
+...
+
+data: {"id":"chatcmpl_abc123","object":"chat.completion.chunk","created":1730634060,"model":"grok-2","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+data: [DONE]
+```
+
+## Examples
+
+### Basic Completion
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    {
+      role: 'user',
+      content: 'How do I organize a grassroots campaign?'
+    }
+  ]
+});
+
+console.log(completion.choices[0].message.content);
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[
+        {
+            "role": "user",
+            "content": "How do I organize a grassroots campaign?"
+        }
+    ]
+)
+
+print(completion.choices[0].message.content)
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/chat/completions \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-2",
+    "messages": [
+      {
+        "role": "user",
+        "content": "How do I organize a grassroots campaign?"
+      }
+    ]
+  }'
+```
+
+</CodeGroup>
+
+### With System Message
+
+Set context and persona with a system message:
+
+<CodeGroup>
+
+```typescript TypeScript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an expert in grassroots organizing with 20 years of experience'
+    },
+    {
+      role: 'user',
+      content: 'How do I build a coalition?'
+    }
+  ]
+});
+```
+
+```python Python
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are an expert in grassroots organizing with 20 years of experience"
+        },
+        {
+            "role": "user",
+            "content": "How do I build a coalition?"
+        }
+    ]
+)
+```
+
+</CodeGroup>
+
+### Multi-Turn Conversation
+
+#### Method 1: Send Full History
+
+<CodeGroup>
+
+```typescript TypeScript
+const messages = [
+  { role: 'user', content: 'What is direct action?' },
+  { role: 'assistant', content: 'Direct action is...' },
+  { role: 'user', content: 'Can you give me examples?' }
+];
+
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages
+});
+```
+
+```python Python
+messages = [
+    {"role": "user", "content": "What is direct action?"},
+    {"role": "assistant", "content": "Direct action is..."},
+    {"role": "user", "content": "Can you give me examples?"}
+]
+
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=messages
+)
+```
+
+</CodeGroup>
+
+#### Method 2: Use Session ID
+
+<CodeGroup>
+
+```typescript TypeScript
+// First message
+const completion1 = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'What is direct action?' }],
+  // @ts-ignore - Vendor extension
+  session_id: 'my-conversation-123'
+});
+
+// Follow-up (references previous context)
+const completion2 = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Can you give me examples?' }],
+  // @ts-ignore - Vendor extension
+  session_id: 'my-conversation-123'
+});
+```
+
+```python Python
+# First message
+completion1 = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "What is direct action?"}],
+    session_id="my-conversation-123"
+)
+
+# Follow-up (references previous context)
+completion2 = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "Can you give me examples?"}],
+    session_id="my-conversation-123"
+)
+```
+
+</CodeGroup>
+
+### With Theory of Change
+
+Align AI responses with your strategic framework:
+
+<CodeGroup>
+
+```typescript TypeScript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'How can I fight climate change?' }
+  ],
+  // @ts-ignore - Vendor extension
+  'x-theory-position': {
+    x: -0.7,  // Subjective (grassroots)
+    y: -0.5   // Material (concrete action)
+  }
+});
+
+// Response emphasizes grassroots organizing and direct action
+```
+
+```python Python
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[
+        {"role": "user", "content": "How can I fight climate change?"}
+    ],
+    x_theory_position={
+        "x": -0.7,  # Subjective (grassroots)
+        "y": -0.5   # Material (concrete action)
+    }
+)
+
+# Response emphasizes grassroots organizing and direct action
+```
+
+</CodeGroup>
+
+**Theory Positions:**
+- **Voluntarism** `{x: -1, y: -1}` - Grassroots mobilization
+- **Structuralism** `{x: 1, y: -1}` - Policy/systems change
+- **Subjectivism** `{x: -1, y: 1}` - Cultural transformation
+- **Theurgism** `{x: 1, y: 1}` - Faith-based activism
+
+See the [Theory of Change Guide](/guides/theory-of-change) for details.
+
+### Streaming Response
+
+Get real-time token-by-token responses:
+
+<CodeGroup>
+
+```typescript TypeScript
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Explain civil disobedience' }],
+  stream: true
+});
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  process.stdout.write(content);
+}
+```
+
+```python Python
+stream = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "Explain civil disobedience"}],
+    stream=True
+)
+
+for chunk in stream:
+    content = chunk.choices[0].delta.content or ""
+    print(content, end="")
+```
+
+</CodeGroup>
+
+See the [Streaming Guide](/api/chat/streaming) for advanced patterns.
+
+### Temperature Control
+
+Control response randomness:
+
+<CodeGroup>
+
+```typescript TypeScript
+// More focused and deterministic
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'What is organizing?' }],
+  temperature: 0.3
+});
+
+// More creative and varied
+const completion2 = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Brainstorm campaign slogans' }],
+  temperature: 1.5
+});
+```
+
+```python Python
+# More focused and deterministic
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "What is organizing?"}],
+    temperature=0.3
+)
+
+# More creative and varied
+completion2 = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "Brainstorm campaign slogans"}],
+    temperature=1.5
+)
+```
+
+</CodeGroup>
+
+### Max Tokens
+
+Limit response length:
+
+<CodeGroup>
+
+```typescript TypeScript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Explain activism' }],
+  max_tokens: 500  // ~375 words
+});
+```
+
+```python Python
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "Explain activism"}],
+    max_tokens=500  # ~375 words
+)
+```
+
+</CodeGroup>
+
+## Error Responses
+
+### 400 Bad Request
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Missing or invalid model",
+    "param": "model",
+    "code": "invalid_model"
+  }
+}
+```
+
+### 401 Unauthorized
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid or expired API key",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+### 402 Payment Required
+
+```json
+{
+  "error": {
+    "type": "insufficient_quota",
+    "message": "Insufficient prepaid balance. Please add funds to continue.",
+    "code": "insufficient_quota"
+  }
+}
+```
+
+### 429 Too Many Requests
+
+```json
+{
+  "error": {
+    "type": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Retry after 30 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+## Pricing
+
+Chat is billed per token at **$0.08 per 1,000 tokens**.
+
+**Token Estimation:**
+- ~750 words = 1,000 tokens
+- Average message: 50-200 tokens
+- Typical conversation: 500-2,000 tokens ($0.04-$0.16)
+
+**Example costs:**
+```
+Question: "How do I organize?" (5 tokens)
+Answer: 200-word response (267 tokens)
+Total: 272 tokens = $0.02
+```
+
+## Rate Limits
+
+| Tier | Requests per Minute | Tokens per Day |
+|------|---------------------|----------------|
+| Free | 10 | 10,000 |
+| Standard | 60 | 1,000,000 |
+| Premium | 300 | 10,000,000 |
+| Enterprise | Custom | Custom |
+
+## Best Practices
+
+### 1. Use System Messages
+
+Set context with system messages for better responses:
+
+```typescript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    {
+      role: 'system',
+      content: 'You are an expert in grassroots organizing with 20 years of experience'
+    },
+    {
+      role: 'user',
+      content: 'How do I build a coalition?'
+    }
+  ]
+});
+```
+
+### 2. Manage Context Window
+
+Keep conversations under 128K tokens. See [best practices guide](/guides/best-practices#context-management).
+
+### 3. Use Streaming for UX
+
+Stream responses for better perceived performance:
+
+```typescript
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Long question...' }],
+  stream: true
+});
+```
+
+### 4. Handle Errors Gracefully
+
+Always implement retry logic and error handling. See [Error Handling Guide](/guides/error-handling).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Streaming" icon="bolt" href="/api/chat/streaming">
+    Use streaming for real-time responses
+  </Card>
+
+  <Card title="List Sessions" icon="list" href="/api/chat/list">
+    List chat sessions
+  </Card>
+
+  <Card title="Theory of Change" icon="compass" href="/guides/theory-of-change">
+    Align AI with your strategic approach
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+</CardGroup>

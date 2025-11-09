@@ -1,0 +1,96 @@
+---
+title: 'Video Generation Example'
+description: 'Complete example of generating videos with the Outcry AI API'
+---
+
+## Quick Start
+
+This example shows how to generate a video, poll for completion, and download the result.
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'oc_live_...',
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+// Create video
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Activists marching through city streets at golden hour',
+  seconds: '8',
+  size: '1280x720'
+});
+
+console.log('Video ID:', video.id);
+
+// Poll for completion
+while (video.status !== 'completed' && video.status !== 'failed') {
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  video = await client.videos.retrieve(video.id);
+  console.log('Progress:', video.progress + '%');
+}
+
+if (video.status === 'completed') {
+  console.log('Video URL:', video.url);
+}
+```
+
+```python Python
+from openai import OpenAI
+import time
+
+client = OpenAI(
+    api_key="oc_live_...",
+    base_url="https://api.outcryai.com/v1"
+)
+
+# Create video
+video = client.videos.create(
+    model="sora-2",
+    prompt="Activists marching through city streets at golden hour",
+    seconds="8",
+    size="1280x720"
+)
+
+print(f"Video ID: {video.id}")
+
+# Poll for completion
+while video.status not in ['completed', 'failed']:
+    time.sleep(2)
+    video = client.videos.retrieve(video.id)
+    print(f"Progress: {video.progress}%")
+
+if video.status == 'completed':
+    print(f"Video URL: {video.url}")
+```
+
+</CodeGroup>
+
+## With Webhooks
+
+For a better experience, use webhooks instead of polling:
+
+```typescript
+// Create video with webhook
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Activists marching through city streets',
+  seconds: '8',
+  size: '1280x720'
+});
+
+// Your webhook will receive:
+// POST /webhooks/outcry
+// {
+//   "type": "video.completed",
+//   "data": { "id": "video_abc123", "status": "completed", ... }
+// }
+```
+
+<Tip>
+  Videos take approximately 60-90 seconds to generate. Use webhooks to avoid polling.
+</Tip>

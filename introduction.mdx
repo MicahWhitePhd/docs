@@ -1,0 +1,100 @@
+# Welcome to Outcry AI API
+
+Build powerful activist tools with AI-powered video generation, chat, and text generation - all accessible through a simple, OpenAI-compatible API.
+
+## What is Outcry AI?
+
+Outcry AI is an AI platform designed specifically for activists, organizers, and change-makers. Our API provides:
+
+- **AI Video Generation**: Create compelling activist videos in seconds using Sora 2 and Sora 2 Pro models
+- **Theory-Aware Chat**: Conversational AI that understands activist strategy through Theory of Change positioning
+- **Text Generation**: Create activist content optimized for your strategic approach
+
+## Why Outcry AI?
+
+### 🎯 Built for Activists
+Unlike generic AI platforms, Outcry AI understands activist strategy. Use our Theory of Change system to align AI outputs with your strategic framework - whether you're focused on grassroots mobilization, policy reform, culture change, or spiritual activism.
+
+### 🔌 OpenAI SDK Compatible
+Already using OpenAI? Switch to Outcry AI by changing just one line - your `baseURL`. All your existing code works immediately with TypeScript, Python, Go, Java, Ruby, .NET, and PHP SDKs.
+
+### 💰 Transparent Pricing
+Pay for what you use with prepaid credits:
+- **Videos**: $1.25 - $18 per video (4-12 seconds, multiple quality tiers)
+- **Chat & Text**: $0.08 per 1,000 tokens
+- No subscriptions, no hidden fees
+
+### 🔒 Privacy First
+Your data, your control. All API requests are authenticated, rate-limited, and tracked for your analytics. Webhook notifications keep you informed of video completions.
+
+## Quick Example
+
+```typescript
+import OpenAI from 'openai';
+
+// Just change the baseURL!
+const client = new OpenAI({
+  apiKey: 'oc_live_...',
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+// Generate an activist video
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Activists marching for climate justice',
+  seconds: '8',
+  size: '1280x720'
+});
+
+console.log(`Video created: ${video.id}`);
+console.log(`Status: ${video.status}`);
+```
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Video Generation" icon="video" href="/api/videos">
+    Create AI-generated activist videos with Sora 2 and Sora 2 Pro models
+  </Card>
+
+  <Card title="Chat Completions" icon="message" href="/api/chat">
+    Theory-aware conversational AI for strategy discussions
+  </Card>
+
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Receive real-time notifications when videos complete
+  </Card>
+
+  <Card title="Theory of Change" icon="compass" href="/guides/theory-of-change">
+    Align AI outputs with your strategic framework
+  </Card>
+</CardGroup>
+
+## Getting Started
+
+<Steps>
+  <Step title="Get Your API Key">
+    Sign up at [outcryai.com](https://www.outcryai.com) and generate an API key from your dashboard.
+  </Step>
+
+  <Step title="Add Credits">
+    Add prepaid credits to your account. Videos start at $1.25, chat/text at $0.08 per 1K tokens.
+  </Step>
+
+  <Step title="Make Your First Request">
+    Use the OpenAI SDK or any HTTP client to start creating videos and generating text.
+  </Step>
+
+  <Step title="Set Up Webhooks (Optional)">
+    Configure webhooks to receive notifications when videos complete processing.
+  </Step>
+</Steps>
+
+## Need Help?
+
+- **Guides**: Comprehensive guides for authentication, webhooks, and Theory of Change
+- **API Reference**: Complete documentation for all endpoints
+- **Examples**: Working code samples in TypeScript, Python, and curl
+- **Support**: Email support@outcryai.com for technical assistance
+
+Ready to build? Start with the [Quickstart Guide](/quickstart) or dive into the [API Reference](/api/videos).

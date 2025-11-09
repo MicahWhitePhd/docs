@@ -1,0 +1,55 @@
+---
+title: 'Chat Completions Example'
+description: 'Examples of using the Chat API with Outcry AI'
+---
+
+## Basic Chat
+
+```typescript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'oc_live_...',
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const response = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'How do I organize a climate strike?' }
+  ]
+});
+
+console.log(response.choices[0].message.content);
+```
+
+## Streaming Response
+
+```typescript
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'Help me plan a protest march.' }
+  ],
+  stream: true
+});
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  process.stdout.write(content);
+}
+```
+
+## With Theory of Change
+
+```typescript
+const response = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'Strategy for labor organizing?' }
+  ],
+  extra_body: {
+    'x-theory-position': { x: -0.8, y: -0.3 } // Emphasizes voluntarism
+  }
+});
+```

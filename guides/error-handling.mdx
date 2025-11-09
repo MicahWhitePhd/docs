@@ -1,0 +1,826 @@
+# Error Handling
+
+Learn how to handle errors gracefully when working with the Outcry AI API.
+
+## Error Response Format
+
+All API errors follow a consistent JSON structure:
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Missing required parameter: prompt",
+    "param": "prompt",
+    "code": "missing_parameter"
+  }
+}
+```
+
+### Error Object Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | string | Error category (see types below) |
+| `message` | string | Human-readable error description |
+| `param` | string | Parameter that caused the error (if applicable) |
+| `code` | string | Machine-readable error code |
+
+## HTTP Status Codes
+
+| Code | Name | Description |
+|------|------|-------------|
+| **200** | OK | Request succeeded |
+| **400** | Bad Request | Invalid request parameters |
+| **401** | Unauthorized | Invalid or missing API key |
+| **402** | Payment Required | Insufficient prepaid balance |
+| **403** | Forbidden | Valid API key but missing required scope |
+| **404** | Not Found | Resource doesn't exist |
+| **410** | Gone | Resource expired (e.g., video >1 hour old) |
+| **422** | Unprocessable Entity | Request valid but unable to process |
+| **429** | Too Many Requests | Rate limit exceeded |
+| **500** | Internal Server Error | Server-side error |
+| **503** | Service Unavailable | Service temporarily unavailable |
+
+## Error Types
+
+### authentication_error (401)
+
+**Cause**: Invalid or missing API key
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid API key provided",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+**Solutions**:
+- Verify API key is correct
+- Check key hasn't been revoked
+- Ensure `Authorization: Bearer` format is correct
+- Verify using live key (`oc_live_...`) not test key
+
+### invalid_request_error (400)
+
+**Cause**: Request parameters are invalid
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "seconds must be '4', '8', or '12'",
+    "param": "seconds",
+    "code": "invalid_seconds"
+  }
+}
+```
+
+**Common causes**:
+- Missing required parameters
+- Invalid parameter values
+- Wrong parameter types
+- Malformed request body
+
+**Solutions**:
+- Check API reference for required parameters
+- Validate parameter values before sending
+- Ensure correct data types (e.g., seconds as STRING)
+
+### permission_error (403)
+
+**Cause**: API key missing required scope
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "permission_error",
+    "message": "This operation requires the 'video:write' scope",
+    "code": "insufficient_scope"
+  }
+}
+```
+
+**Solutions**:
+- Check which scopes your API key has
+- Create new key with required scopes
+- See [Authentication Guide](/guides/authentication#api-key-scopes)
+
+### insufficient_quota (402)
+
+**Cause**: Not enough prepaid credits
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "insufficient_quota",
+    "message": "Insufficient prepaid balance. Required: $2.50, Available: $1.25",
+    "code": "insufficient_quota"
+  }
+}
+```
+
+**Solutions**:
+- Add credits to your account
+- Check balance: `GET /v1/account/balance`
+- Set up low-balance alerts in dashboard
+
+### rate_limit_error (429)
+
+**Cause**: Too many requests in time window
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "rate_limit_error",
+    "message": "Rate limit exceeded. Please try again in 42 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Solutions**:
+- Implement exponential backoff
+- Check rate limit headers
+- Spread requests over time
+- Upgrade to higher tier for more requests
+
+### api_error (500)
+
+**Cause**: Server-side error
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "api_error",
+    "message": "An error occurred while processing your request",
+    "code": "internal_error"
+  }
+}
+```
+
+**Solutions**:
+- Retry request with exponential backoff
+- Check status page for incidents
+- Contact support if persistent
+
+### service_unavailable_error (503)
+
+**Cause**: Service temporarily down (maintenance or overload)
+
+**Example**:
+```json
+{
+  "error": {
+    "type": "service_unavailable_error",
+    "message": "Service temporarily unavailable. Please try again later.",
+    "code": "service_unavailable"
+  }
+}
+```
+
+**Solutions**:
+- Implement retry logic with exponential backoff
+- Check status page
+- Monitor for service restoration
+
+## Error Handling Best Practices
+
+### 1. Always Use Try-Catch
+
+Wrap all API calls in try-catch blocks:
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+async function createVideo(prompt: string) {
+  try {
+    const video = await client.videos.create({
+      model: 'sora-2',
+      prompt,
+      seconds: '8',
+      size: '1280x720'
+    });
+
+    return { success: true, video };
+  } catch (error: any) {
+    return { success: false, error: handleApiError(error) };
+  }
+}
+
+function handleApiError(error: any) {
+  // OpenAI SDK wraps errors in APIError
+  if (error.status) {
+    switch (error.status) {
+      case 400:
+        return {
+          type: 'validation',
+          message: `Invalid request: ${error.message}`,
+          retryable: false
+        };
+
+      case 401:
+        return {
+          type: 'auth',
+          message: 'Invalid API key',
+          retryable: false
+        };
+
+      case 402:
+        return {
+          type: 'quota',
+          message: 'Insufficient credits. Please add more credits.',
+          retryable: false
+        };
+
+      case 403:
+        return {
+          type: 'permission',
+          message: 'Missing required API key scope',
+          retryable: false
+        };
+
+      case 429:
+        return {
+          type: 'rate_limit',
+          message: 'Rate limit exceeded. Please slow down.',
+          retryable: true,
+          retryAfter: error.headers?.['retry-after']
+        };
+
+      case 500:
+      case 503:
+        return {
+          type: 'server',
+          message: 'Server error. Please try again.',
+          retryable: true
+        };
+
+      default:
+        return {
+          type: 'unknown',
+          message: error.message,
+          retryable: false
+        };
+    }
+  }
+
+  // Network errors
+  return {
+    type: 'network',
+    message: 'Network error. Check your connection.',
+    retryable: true
+  };
+}
+```
+
+```python Python
+from openai import OpenAI
+import time
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+def create_video(prompt: str):
+    try:
+        video = client.videos.create(
+            model="sora-2",
+            prompt=prompt,
+            seconds="8",
+            size="1280x720"
+        )
+        return {"success": True, "video": video}
+
+    except Exception as e:
+        return {"success": False, "error": handle_api_error(e)}
+
+def handle_api_error(error):
+    if hasattr(error, 'status_code'):
+        status = error.status_code
+
+        if status == 400:
+            return {
+                "type": "validation",
+                "message": f"Invalid request: {str(error)}",
+                "retryable": False
+            }
+
+        elif status == 401:
+            return {
+                "type": "auth",
+                "message": "Invalid API key",
+                "retryable": False
+            }
+
+        elif status == 402:
+            return {
+                "type": "quota",
+                "message": "Insufficient credits. Please add more credits.",
+                "retryable": False
+            }
+
+        elif status == 403:
+            return {
+                "type": "permission",
+                "message": "Missing required API key scope",
+                "retryable": False
+            }
+
+        elif status == 429:
+            return {
+                "type": "rate_limit",
+                "message": "Rate limit exceeded. Please slow down.",
+                "retryable": True
+            }
+
+        elif status in [500, 503]:
+            return {
+                "type": "server",
+                "message": "Server error. Please try again.",
+                "retryable": True
+            }
+
+    # Network errors
+    return {
+        "type": "network",
+        "message": "Network error. Check your connection.",
+        "retryable": True
+    }
+```
+
+</CodeGroup>
+
+### 2. Implement Exponential Backoff
+
+For retryable errors (429, 500, 503), use exponential backoff:
+
+<CodeGroup>
+
+```typescript TypeScript
+async function createVideoWithRetry(
+  prompt: string,
+  maxRetries = 3
+): Promise<Video> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.videos.create({
+        model: 'sora-2',
+        prompt,
+        seconds: '8',
+        size: '1280x720'
+      });
+    } catch (error: any) {
+      const shouldRetry = (
+        error.status === 429 ||
+        error.status === 500 ||
+        error.status === 503
+      );
+
+      if (!shouldRetry || attempt === maxRetries - 1) {
+        throw error;
+      }
+
+      // Exponential backoff: 1s, 2s, 4s
+      const delay = Math.pow(2, attempt) * 1000;
+      console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Max retries exceeded');
+}
+```
+
+```python Python
+import time
+
+def create_video_with_retry(prompt: str, max_retries: int = 3):
+    for attempt in range(max_retries):
+        try:
+            return client.videos.create(
+                model="sora-2",
+                prompt=prompt,
+                seconds="8",
+                size="1280x720"
+            )
+        except Exception as error:
+            should_retry = (
+                hasattr(error, 'status_code') and
+                error.status_code in [429, 500, 503]
+            )
+
+            if not should_retry or attempt == max_retries - 1:
+                raise error
+
+            # Exponential backoff: 1s, 2s, 4s
+            delay = (2 ** attempt)
+            print(f"Retry {attempt + 1}/{max_retries} after {delay}s...")
+            time.sleep(delay)
+
+    raise Exception("Max retries exceeded")
+```
+
+</CodeGroup>
+
+### 3. Respect Rate Limit Headers
+
+Check rate limit headers to avoid hitting limits:
+
+```typescript
+import { Headers } from 'node-fetch';
+
+async function createVideoRateLimitAware(prompt: string) {
+  const video = await client.videos.create({
+    model: 'sora-2',
+    prompt,
+    seconds: '8',
+    size: '1280x720'
+  });
+
+  // Check rate limit headers
+  const response = video.response;  // Access underlying HTTP response
+  const remaining = response.headers.get('X-RateLimit-Remaining');
+  const reset = response.headers.get('X-RateLimit-Reset');
+
+  console.log(`Remaining requests: ${remaining}`);
+  console.log(`Reset at: ${new Date(parseInt(reset!) * 1000)}`);
+
+  // Slow down if close to limit
+  if (parseInt(remaining!) < 5) {
+    console.warn('Approaching rate limit, slowing down...');
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+
+  return video;
+}
+```
+
+### 4. Validate Before Sending
+
+Validate requests client-side to reduce API errors:
+
+```typescript
+interface VideoRequest {
+  model: 'sora-2' | 'sora-2-pro';
+  prompt: string;
+  seconds: '4' | '8' | '12';
+  size: string;
+}
+
+function validateVideoRequest(req: VideoRequest): string[] {
+  const errors: string[] = [];
+
+  // Validate prompt
+  if (!req.prompt || req.prompt.length < 10) {
+    errors.push('Prompt must be at least 10 characters');
+  }
+  if (req.prompt.length > 500) {
+    errors.push('Prompt must be less than 500 characters');
+  }
+
+  // Validate seconds
+  if (!['4', '8', '12'].includes(req.seconds)) {
+    errors.push('seconds must be "4", "8", or "12"');
+  }
+
+  // Validate size
+  const validSizes = [
+    '1280x720', '720x1280',  // Standard 16:9
+    '1024x1792', '1792x1024'  // HD portrait/landscape
+  ];
+  if (!validSizes.includes(req.size)) {
+    errors.push(`size must be one of: ${validSizes.join(', ')}`);
+  }
+
+  return errors;
+}
+
+async function createVideoSafe(req: VideoRequest) {
+  // Validate first
+  const errors = validateVideoRequest(req);
+  if (errors.length > 0) {
+    throw new Error(`Validation failed: ${errors.join(', ')}`);
+  }
+
+  // Then create
+  return await client.videos.create(req);
+}
+```
+
+### 5. Log Errors Comprehensively
+
+Include context when logging errors:
+
+```typescript
+import { Logger } from './logger';
+
+async function createVideo(prompt: string, userId: string) {
+  const startTime = Date.now();
+
+  try {
+    const video = await client.videos.create({
+      model: 'sora-2',
+      prompt,
+      seconds: '8',
+      size: '1280x720'
+    });
+
+    Logger.info('Video created', {
+      userId,
+      videoId: video.id,
+      duration: Date.now() - startTime
+    });
+
+    return video;
+  } catch (error: any) {
+    Logger.error('Video creation failed', {
+      userId,
+      prompt,
+      errorType: error.status,
+      errorMessage: error.message,
+      duration: Date.now() - startTime,
+      stack: error.stack
+    });
+
+    throw error;
+  }
+}
+```
+
+### 6. Handle User-Facing Errors
+
+Show helpful messages to users:
+
+```typescript
+function getUSerFriendlyError(error: any): string {
+  switch (error.status) {
+    case 400:
+      return 'Invalid video settings. Please check your input and try again.';
+
+    case 401:
+      return 'Authentication failed. Please check your API key.';
+
+    case 402:
+      return 'Insufficient credits. Please add more credits to your account.';
+
+    case 403:
+      return 'You don\'t have permission to perform this action.';
+
+    case 429:
+      return 'You\'re sending requests too quickly. Please slow down and try again.';
+
+    case 500:
+    case 503:
+      return 'Our servers are experiencing issues. Please try again in a few minutes.';
+
+    default:
+      return 'An unexpected error occurred. Please try again.';
+  }
+}
+
+// In your UI
+try {
+  const video = await createVideo(prompt);
+  showSuccess('Video created successfully!');
+} catch (error) {
+  showError(getUserFriendlyError(error));
+}
+```
+
+## Common Error Scenarios
+
+### Scenario 1: Video Creation with Content Policy Violation
+
+```typescript
+try {
+  const video = await client.videos.create({
+    model: 'sora-2',
+    prompt: 'Prohibited content',  // Violates policy
+    seconds: '8',
+    size: '1280x720'
+  });
+} catch (error: any) {
+  if (error.status === 422) {
+    // Content policy violation
+    console.error('Content violated usage policies');
+    console.error('Reason:', error.message);
+
+    // Show user-friendly message
+    showError('Your video prompt contains content that violates our usage policies. Please revise and try again.');
+  }
+}
+```
+
+### Scenario 2: Insufficient Credits
+
+```typescript
+try {
+  const video = await client.videos.create({
+    model: 'sora-2-pro',  // Expensive model
+    prompt: 'Activist rally',
+    seconds: '12',  // Long duration
+    size: '1024x1792'  // HD resolution
+  });
+} catch (error: any) {
+  if (error.status === 402) {
+    // Insufficient credits
+    const message = error.message;  // "Required: $9.00, Available: $2.50"
+
+    // Parse required amount
+    const match = message.match(/Required: \$(\d+\.\d+)/);
+    const required = match ? parseFloat(match[1]) : 0;
+
+    // Redirect to billing
+    showError(`This video requires $${required} in credits. You need to add more credits.`, {
+      action: 'Add Credits',
+      link: '/billing/add-credits'
+    });
+  }
+}
+```
+
+### Scenario 3: Rate Limit with Retry-After
+
+```typescript
+try {
+  const video = await client.videos.create({...});
+} catch (error: any) {
+  if (error.status === 429) {
+    // Check Retry-After header
+    const retryAfter = error.headers?.['retry-after'];
+
+    if (retryAfter) {
+      const seconds = parseInt(retryAfter);
+      console.log(`Rate limited. Retry after ${seconds} seconds`);
+
+      // Wait and retry
+      await new Promise(resolve => setTimeout(resolve, seconds * 1000));
+      const video = await client.videos.create({...});
+    }
+  }
+}
+```
+
+### Scenario 4: Expired Video URL
+
+```typescript
+try {
+  const video = await client.videos.retrieve('video_abc123');
+
+  // Try to download
+  const response = await fetch(video.url);
+} catch (error: any) {
+  if (error.status === 410) {
+    // Video expired (>1 hour old, not persisted to R2)
+    console.error('Video has expired. Videos are only available for 1 hour unless persisted.');
+
+    showError('This video has expired and is no longer available. Videos are automatically persisted to permanent storage after 45 minutes, but this video was created more than 1 hour ago and was not persisted.');
+  }
+}
+```
+
+### Scenario 5: Webhook Signature Verification Failure
+
+```typescript
+export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+  const signature = req.headers.get('x-outcry-signature');
+
+  try {
+    const isValid = verifyWebhookSignature(rawBody, signature, process.env.WEBHOOK_SECRET!);
+
+    if (!isValid) {
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    // Process webhook...
+  } catch (error: any) {
+    if (error.message.includes('Timestamp too old')) {
+      // Replay attack or clock skew
+      Logger.warn('Webhook timestamp too old', {
+        signature,
+        error: error.message
+      });
+
+      return NextResponse.json(
+        { error: 'Timestamp too old' },
+        { status: 401 }
+      );
+    }
+
+    throw error;
+  }
+}
+```
+
+## Testing Error Handling
+
+### Unit Test Example
+
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+
+describe('Video creation error handling', () => {
+  it('should handle insufficient credits', async () => {
+    // Mock API to return 402
+    vi.spyOn(client.videos, 'create').mockRejectedValue({
+      status: 402,
+      message: 'Insufficient prepaid balance. Required: $2.50, Available: $1.25'
+    });
+
+    const result = await createVideo('Test prompt', 'user123');
+
+    expect(result.success).toBe(false);
+    expect(result.error.type).toBe('quota');
+    expect(result.error.message).toContain('Insufficient credits');
+  });
+
+  it('should retry on 500 errors', async () => {
+    let attempts = 0;
+
+    vi.spyOn(client.videos, 'create').mockImplementation(async () => {
+      attempts++;
+      if (attempts < 3) {
+        throw { status: 500, message: 'Server error' };
+      }
+      return { id: 'video_abc123', status: 'queued' };
+    });
+
+    const video = await createVideoWithRetry('Test prompt');
+
+    expect(attempts).toBe(3);
+    expect(video.id).toBe('video_abc123');
+  });
+});
+```
+
+## Monitoring Errors
+
+### Error Rate Tracking
+
+Track error rates to detect issues:
+
+```typescript
+const errorMetrics = {
+  total: 0,
+  byType: {} as Record<number, number>
+};
+
+async function trackApiCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    errorMetrics.total++;
+    errorMetrics.byType[error.status] = (errorMetrics.byType[error.status] || 0) + 1;
+
+    // Alert if error rate >10%
+    const errorRate = errorMetrics.total / totalRequests;
+    if (errorRate > 0.1) {
+      alertOps('High API error rate detected!', errorMetrics);
+    }
+
+    throw error;
+  }
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/guides/authentication">
+    Prevent 401/403 authentication errors
+  </Card>
+
+  <Card title="Rate Limits" icon="gauge" href="/guides/rate-limits">
+    Avoid 429 rate limit errors
+  </Card>
+
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Handle webhook delivery errors
+  </Card>
+
+  <Card title="Best Practices" icon="star" href="/guides/best-practices">
+    Follow production-ready patterns
+  </Card>
+</CardGroup>

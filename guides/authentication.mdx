@@ -1,0 +1,425 @@
+# Authentication
+
+Learn how to authenticate with the Outcry AI API using API keys, understand scopes, and follow security best practices.
+
+## API Key Format
+
+All API requests require authentication using API keys. Outcry AI uses a prefix system to identify key types:
+
+```
+oc_live_abc123def456...    # Live mode (production)
+oc_test_xyz789ghi012...    # Test mode (development)
+```
+
+- **Live keys** (`oc_live_...`) charge your account and create real videos
+- **Test keys** (`oc_test_...`) simulate API calls without charges (coming soon)
+
+<Warning>
+  Never share your API keys publicly! If a key is compromised, revoke it immediately from your dashboard.
+</Warning>
+
+## Authentication Methods
+
+### Bearer Token (Recommended)
+
+Include your API key in the `Authorization` header using the Bearer scheme:
+
+```bash
+Authorization: Bearer oc_live_abc123def456...
+```
+
+**Example:**
+
+```bash
+curl https://api.outcryai.com/v1/videos \
+  -H "Authorization: Bearer oc_live_abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{"model": "sora-2", "prompt": "Activist rally", "seconds": "8", "size": "1280x720"}'
+```
+
+### Using OpenAI SDK
+
+The OpenAI SDK automatically handles authentication. Just pass your API key:
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'oc_live_abc123def456...',  // Your Outcry AI key
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+// SDK automatically adds: Authorization: Bearer oc_live_...
+const video = await client.videos.create({...});
+```
+
+```python Python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="oc_live_abc123def456...",  # Your Outcry AI key
+    base_url="https://api.outcryai.com/v1"
+)
+
+# SDK automatically adds: Authorization: Bearer oc_live_...
+video = client.videos.create(...)
+```
+
+</CodeGroup>
+
+## API Key Scopes
+
+Each API key has specific permissions (scopes) that control what it can access. When creating a key, select only the scopes you need.
+
+### Available Scopes
+
+| Scope | Description | Endpoints |
+|-------|-------------|-----------|
+| `video:read` | Read video data | `GET /v1/videos`, `GET /v1/videos/:id` |
+| `video:write` | Create videos | `POST /v1/videos`, `POST /v1/videos/:id/remix` |
+| `video:delete` | Delete videos | `DELETE /v1/videos/:id` |
+| `chat:read` | Read chat history | `GET /v1/chat/completions`, `GET /v1/chat/completions/:id` |
+| `chat:write` | Create chat completions | `POST /v1/chat/completions` |
+| `text:write` | Create text completions | `POST /v1/completions` |
+| `webhook:read` | View webhooks | `GET /v1/webhooks`, `GET /v1/webhooks/:id` |
+| `webhook:write` | Manage webhooks | `POST /v1/webhooks`, `PATCH /v1/webhooks/:id` |
+| `webhook:delete` | Delete webhooks | `DELETE /v1/webhooks/:id` |
+
+### Scope Best Practices
+
+<Tip>
+  **Principle of least privilege**: Only grant the scopes your application actually needs. This limits damage if a key is compromised.
+</Tip>
+
+**Example scenarios:**
+
+1. **Video generation service**:
+   - ✅ `video:write` - Create videos
+   - ✅ `video:read` - Check status
+   - ✅ `webhook:write` - Set up notifications
+   - ❌ Don't need `video:delete` or `chat:*`
+
+2. **Analytics dashboard**:
+   - ✅ `video:read` - View video data
+   - ✅ `chat:read` - View chat history
+   - ❌ Don't need any `:write` scopes
+
+3. **Video management tool**:
+   - ✅ `video:read` - View videos
+   - ✅ `video:delete` - Remove videos
+   - ❌ Don't need `video:write` or `webhook:*`
+
+## Creating API Keys
+
+### From Dashboard
+
+1. Log in to [outcryai.com](https://www.outcryai.com)
+2. Navigate to **Settings > API Keys**
+3. Click **Create New Key**
+4. Configure your key:
+   - **Name**: Descriptive name (e.g., "Production Server", "Development")
+   - **Scopes**: Select required permissions
+   - **Rate Limit** (optional): Custom rate limit (default: 100 req/min)
+   - **Expiration** (optional): Auto-expire after X days
+5. Click **Create**
+6. **Copy your key immediately** - it won't be shown again!
+
+### Key Management
+
+- **View keys**: See all your API keys and their scopes
+- **Revoke keys**: Immediately invalidate compromised keys
+- **Rotate keys**: Create new key → migrate code → revoke old key
+- **Monitor usage**: See which keys are being used most
+
+<Warning>
+  API keys are shown **only once** when created. If you lose a key, you must create a new one.
+</Warning>
+
+## Security Best Practices
+
+### 1. Use Environment Variables
+
+Never hardcode API keys in your source code. Use environment variables:
+
+<CodeGroup>
+
+```typescript .env (Node.js)
+# .env or .env.local
+OUTCRY_API_KEY=oc_live_abc123def456...
+```
+
+```python .env (Python)
+# .env
+OUTCRY_API_KEY=oc_live_abc123def456...
+```
+
+```bash Usage
+# Load from environment
+const apiKey = process.env.OUTCRY_API_KEY;  // Node.js
+api_key = os.environ.get("OUTCRY_API_KEY")  # Python
+```
+
+</CodeGroup>
+
+**Add `.env` to `.gitignore`:**
+
+```bash .gitignore
+# Environment variables
+.env
+.env.local
+.env.production
+```
+
+### 2. Rotate Keys Regularly
+
+Rotate API keys every 90 days or when:
+- An employee with access leaves
+- A key may have been exposed
+- Moving from development to production
+- Migrating to new infrastructure
+
+**Zero-downtime rotation:**
+
+1. Create new API key
+2. Deploy code with new key
+3. Monitor for 24 hours
+4. Revoke old key
+
+### 3. Use Different Keys per Environment
+
+Never use the same API key across environments:
+
+| Environment | Key Type | Scopes |
+|------------|----------|--------|
+| Production | Live key | Only required scopes |
+| Staging | Live key (separate) | Full access for testing |
+| Development | Live key (separate) | Full access for testing |
+| CI/CD | Live key (separate) | Minimal scopes needed |
+
+### 4. Implement Key Vaulting
+
+For production applications, store API keys in a secrets management system:
+
+- **AWS Secrets Manager**
+- **HashiCorp Vault**
+- **Azure Key Vault**
+- **Google Secret Manager**
+
+**Example with AWS Secrets Manager:**
+
+```typescript
+import { SecretsManager } from '@aws-sdk/client-secrets-manager';
+
+const client = new SecretsManager({ region: 'us-east-1' });
+const secret = await client.getSecretValue({ SecretId: 'outcry-api-key' });
+const apiKey = JSON.parse(secret.SecretString).OUTCRY_API_KEY;
+
+const outcryClient = new OpenAI({
+  apiKey,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+```
+
+### 5. Restrict API Key Access
+
+- **Backend only**: Never expose API keys in frontend JavaScript
+- **Server-side rendering**: Load keys server-side only
+- **Proxy pattern**: Create your own API that calls Outcry AI
+
+**❌ Never do this:**
+
+```typescript
+// DON'T: Exposing API key in frontend
+const client = new OpenAI({
+  apiKey: 'oc_live_abc123...',  // Visible to all users!
+  baseURL: 'https://api.outcry.com/v1'
+});
+```
+
+**✅ Do this instead:**
+
+```typescript
+// Backend API (Next.js API route)
+export async function POST(req: Request) {
+  const client = new OpenAI({
+    apiKey: process.env.OUTCRY_API_KEY,  // Server-side only
+    baseURL: 'https://api.outcryai.com/v1'
+  });
+
+  const video = await client.videos.create({...});
+  return Response.json({ videoId: video.id });
+}
+
+// Frontend calls your backend
+const response = await fetch('/api/create-video', {
+  method: 'POST',
+  body: JSON.stringify({ prompt: 'Activist rally' })
+});
+```
+
+### 6. Monitor API Key Usage
+
+Track usage to detect anomalies:
+
+1. **Dashboard analytics**: View usage by key in your dashboard
+2. **Usage alerts**: Set up alerts for unusual spikes
+3. **Audit logs**: Review access patterns regularly
+4. **Credit alerts**: Get notified when balance is low
+
+## Rate Limiting
+
+All API keys are subject to rate limits to ensure fair usage and protect the service.
+
+### Default Rate Limits
+
+| Tier | Requests per Minute | Requests per Day |
+|------|---------------------|------------------|
+| Free | 10 | 100 |
+| Standard | 100 | 10,000 |
+| Premium | 500 | 50,000 |
+| Enterprise | Custom | Custom |
+
+### Rate Limit Headers
+
+Every API response includes rate limit headers:
+
+```http
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1730638800
+```
+
+- `X-RateLimit-Limit`: Total requests allowed per window
+- `X-RateLimit-Remaining`: Requests remaining in current window
+- `X-RateLimit-Reset`: Unix timestamp when limit resets
+
+### Handling Rate Limits
+
+When you exceed the rate limit, you'll receive a `429 Too Many Requests` response:
+
+```json
+{
+  "error": {
+    "type": "rate_limit_error",
+    "message": "Rate limit exceeded. Please try again in 42 seconds.",
+    "code": "rate_limit_exceeded"
+  }
+}
+```
+
+**Best practices:**
+
+1. **Respect rate limits**: Check headers and slow down if needed
+2. **Implement exponential backoff**: Wait longer between retries
+3. **Cache results**: Don't make duplicate requests
+4. **Batch operations**: Combine multiple operations where possible
+5. **Use webhooks**: Don't poll - use webhooks for async operations
+
+**Example with exponential backoff:**
+
+```typescript
+async function createVideoWithRetry(prompt: string, maxRetries = 3): Promise<Video> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await client.videos.create({
+        model: 'sora-2',
+        prompt,
+        seconds: '8',
+        size: '1280x720'
+      });
+    } catch (error: any) {
+      if (error.status === 429 && attempt < maxRetries - 1) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`Rate limited. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      } else {
+        throw error;
+      }
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+```
+
+## Authentication Errors
+
+### 401 Unauthorized
+
+**Cause**: Invalid or missing API key
+
+```json
+{
+  "error": {
+    "type": "authentication_error",
+    "message": "Invalid API key provided",
+    "code": "invalid_api_key"
+  }
+}
+```
+
+**Solutions:**
+- Verify your API key is correct
+- Check that the key hasn't been revoked
+- Ensure you're using the correct key type (live vs test)
+- Verify the `Authorization` header format
+
+### 403 Forbidden
+
+**Cause**: Valid API key but missing required scope
+
+```json
+{
+  "error": {
+    "type": "permission_error",
+    "message": "This operation requires the 'video:write' scope",
+    "code": "insufficient_scope"
+  }
+}
+```
+
+**Solutions:**
+- Check which scopes your key has
+- Create a new key with the required scopes
+- Update your existing key's scopes (requires re-creating)
+
+## Testing Authentication
+
+Test your authentication setup with a simple request:
+
+```bash
+curl https://api.outcryai.com/v1/health \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+```
+
+If authentication works, you'll receive:
+
+```json
+{
+  "status": "ok",
+  "version": "1.0.0",
+  "timestamp": "2025-11-04T12:00:00Z"
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Make your first authenticated API request
+  </Card>
+
+  <Card title="Video API" icon="video" href="/api/videos">
+    Learn how to create videos with authenticated requests
+  </Card>
+
+  <Card title="Webhooks" icon="webhook" href="/guides/webhooks">
+    Set up webhooks with HMAC authentication
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle authentication errors gracefully
+  </Card>
+</CardGroup>

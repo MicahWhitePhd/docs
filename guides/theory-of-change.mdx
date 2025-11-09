@@ -1,0 +1,504 @@
+# Theory of Change
+
+Learn how Outcry AI's unique Theory of Change system aligns AI outputs with your strategic approach to activism.
+
+## What is Theory of Change?
+
+Theory of Change is a framework for understanding **how social change happens**. Different activists have different beliefs about what creates change:
+
+- **Grassroots organizers** believe in mass mobilization and direct action
+- **Policy reformers** focus on systemic change through legislation
+- **Cultural activists** work to shift consciousness and narratives
+- **Faith-based activists** see spiritual transformation as central
+
+Outcry AI allows you to **configure the AI's strategic lens** so it gives advice aligned with your approach, not a generic one-size-fits-all answer.
+
+## The Four Theories
+
+Outcry AI uses a 2D positioning system based on four foundational theories:
+
+```
+                Spiritual (+1)
+                     ↑
+                     |
+         Theurgism   |   Subjectivism
+         (Faith)     |   (Culture)
+                     |
+                     |
+    ←────────────────┼────────────────→
+   Objective     (0,0)    Subjective
+    Material         |
+                     |
+         Structuralism | Voluntarism
+         (Systems)    |   (Grassroots)
+                     |
+                     ↓
+                Material (-1)
+```
+
+### 1. Voluntarism (Bottom-Left)
+
+**Core Belief**: Change comes from conscious will and mass participation.
+
+**Position**: `{ x: -1, y: -1 }`
+
+**Key Concepts**:
+- Direct action and civil disobedience
+- Grassroots mobilization
+- Collective consciousness
+- People power
+
+**Strategic Focus**:
+- Organizing protests and rallies
+- Building coalitions and movements
+- Training activists
+- Community empowerment
+
+**Example Activists**: Rosa Parks, Cesar Chavez, Greta Thunberg
+
+### 2. Structuralism (Bottom-Right)
+
+**Core Belief**: Change comes from impersonal material forces like economics and systems.
+
+**Position**: `{ x: 1, y: -1 }`
+
+**Key Concepts**:
+- Economic systems
+- Power structures
+- Policy reform
+- Institutional change
+
+**Strategic Focus**:
+- Lobbying for legislation
+- Building institutions
+- Economic leverage (boycotts, divestment)
+- Structural reform
+
+**Example Activists**: Martin Luther King Jr. (later years), Ralph Nader
+
+### 3. Subjectivism (Top-Left)
+
+**Core Belief**: Change comes from shifting consciousness and cultural narratives.
+
+**Position**: `{ x: -1, y: 1 }`
+
+**Key Concepts**:
+- Cultural transformation
+- Consciousness raising
+- Narrative change
+- Art and media
+
+**Strategic Focus**:
+- Media campaigns
+- Storytelling and art
+- Changing public discourse
+- Shifting values
+
+**Example Activists**: Gloria Steinem, bell hooks, Banksy
+
+### 4. Theurgism (Top-Right)
+
+**Core Belief**: Change comes through spiritual/supernatural intervention.
+
+**Position**: `{ x: 1, y: 1 }`
+
+**Key Concepts**:
+- Faith and prayer
+- Moral witness
+- Divine justice
+- Spiritual transformation
+
+**Strategic Focus**:
+- Faith-based organizing
+- Moral appeals
+- Religious community engagement
+- Prophetic witness
+
+**Example Activists**: Martin Luther King Jr. (early years), Dorothy Day, Mahatma Gandhi
+
+## Using Theory Positions
+
+### Setting a Theory Position
+
+Use the `x-theory-position` parameter in your API requests:
+
+<CodeGroup>
+
+```typescript TypeScript
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'How can I fight climate change?' }
+  ],
+  // @ts-ignore - Vendor extension
+  'x-theory-position': { x: -0.8, y: -0.6 }  // Strong voluntarist
+});
+```
+
+```python Python
+completion = client.chat.completions.create(
+    model="grok-2",
+    messages=[
+        {"role": "user", "content": "How can I fight climate change?"}
+    ],
+    extra_body={
+        "x-theory-position": {"x": -0.8, "y": -0.6}  # Strong voluntarist
+    }
+)
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/chat/completions \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-2",
+    "messages": [{"role": "user", "content": "How can I fight climate change?"}],
+    "x-theory-position": {"x": -0.8, "y": -0.6}
+  }'
+```
+
+</CodeGroup>
+
+### Position Coordinates
+
+**X-axis**: Subjective (-1) to Objective (+1)
+- **-1.0** = Purely subjective (consciousness, culture, narrative)
+- **0.0** = Balanced
+- **+1.0** = Purely objective (structures, economics, institutions)
+
+**Y-axis**: Material (-1) to Spiritual (+1)
+- **-1.0** = Purely material (concrete actions, physical power)
+- **0.0** = Balanced
+- **+1.0** = Purely spiritual (faith, values, moral witness)
+
+### Pure Theory Positions
+
+Use these positions for single-theory focus:
+
+```typescript
+// Pure Voluntarism (Grassroots organizing)
+{ x: -1.0, y: -1.0 }
+
+// Pure Structuralism (Policy reform)
+{ x: 1.0, y: -1.0 }
+
+// Pure Subjectivism (Cultural change)
+{ x: -1.0, y: 1.0 }
+
+// Pure Theurgism (Faith-based activism)
+{ x: 1.0, y: 1.0 }
+```
+
+### Blended Positions
+
+Most real-world activism blends multiple theories:
+
+```typescript
+// Faith-Based Organizing (Theurgism + Voluntarism)
+{ x: 0.2, y: 0.6 }
+// 40% Theurgism, 30% Subjectivism, 20% Voluntarism, 10% Structuralism
+
+// Direct Action Focused (Voluntarism + Structuralism)
+{ x: 0.0, y: -0.7 }
+// 60% Voluntarism, 20% Structuralism, 15% Subjectivism, 5% Theurgism
+
+// Policy Reform (Structuralism + Voluntarism)
+{ x: 0.5, y: -0.4 }
+// 60% Structuralism, 20% Voluntarism, 15% Subjectivism, 5% Theurgism
+
+// Culture Jammer (Subjectivism + Voluntarism)
+{ x: -0.4, y: 0.3 }
+// 45% Subjectivism, 30% Voluntarism, 10% Structuralism, 15% Theurgism
+
+// Balanced (All theories equally)
+{ x: 0.0, y: 0.0 }
+// 25% each theory
+```
+
+## How Theory Affects AI Responses
+
+The Theory of Change position dynamically modifies the AI's strategic lens throughout its response.
+
+### Example: Climate Change Strategy
+
+**Question**: "How can I fight climate change?"
+
+**Voluntarist Response** (`{ x: -0.8, y: -0.6 }`):
+> I recommend organizing a direct action campaign. Start by:
+> 1. Building a coalition of local climate activists
+> 2. Planning a protest at your city's fossil fuel infrastructure
+> 3. Training volunteers in civil disobedience tactics
+> 4. Creating a mass mobilization plan for 500+ participants
+>
+> The key is **collective action and people power**. When enough people act together, we can force change.
+
+**Structuralist Response** (`{ x: 0.8, y: -0.5 }`):
+> I recommend a systemic policy approach. Focus on:
+> 1. Lobbying for carbon pricing legislation at the state level
+> 2. Building coalitions with business leaders who support clean energy
+> 3. Researching economic incentives that favor renewables
+> 4. Creating a 10-year policy roadmap with measurable targets
+>
+> Change happens through **institutional reform and economic leverage**. Target the systems that perpetuate the problem.
+
+**Subjectivist Response** (`{ x: -0.7, y: 0.6 }`):
+> I recommend a cultural narrative shift. Consider:
+> 1. Creating compelling storytelling campaigns that humanize climate impacts
+> 2. Working with artists and filmmakers to shift public consciousness
+> 3. Reframing climate action as a positive cultural identity
+> 4. Building a movement brand that inspires cultural participation
+>
+> Change happens when **we transform how people see the world**. Win hearts and minds first.
+
+**Theurgist Response** (`{ x: 0.6, y: 0.8 }`):
+> I recommend faith-based climate organizing. Focus on:
+> 1. Engaging religious communities around "creation care" theology
+> 2. Organizing interfaith climate vigils and prayer actions
+> 3. Making moral appeals to spiritual leaders
+> 4. Framing climate action as spiritual stewardship
+>
+> Change requires **spiritual transformation and moral witness**. Appeal to people's deepest values.
+
+## Balancing Multiple Theories
+
+Most effective campaigns blend multiple theories. Here's how to think about combinations:
+
+### Voluntarism + Structuralism (Pragmatic Organizing)
+
+**Position**: `{ x: 0.0, y: -0.7 }`
+
+**Approach**: Grassroots mobilization + policy targets
+
+**Example**: "We'll organize 10,000 people to march on the state capitol while our policy team lobbies legislators for clean energy legislation."
+
+### Subjectivism + Voluntarism (Movement Culture)
+
+**Position**: `{ x: -0.6, y: 0.0 }`
+
+**Approach**: Cultural narrative + grassroots action
+
+**Example**: "We'll create a viral social media campaign to shift public opinion, then channel that energy into local organizing chapters."
+
+### Theurgism + Structuralism (Faith-Based Reform)
+
+**Position**: `{ x: 0.6, y: 0.3 }`
+
+**Approach**: Moral authority + institutional change
+
+**Example**: "We'll mobilize faith communities to lobby for housing justice legislation, using moral framing to win over conservative lawmakers."
+
+## Best Practices
+
+### 1. Know Your Strategic Approach
+
+Before using Theory of Change, reflect on your actual strategy:
+
+- What do you believe creates change?
+- Where do you focus your energy?
+- Who are your role models?
+- What tactics do you use most?
+
+### 2. Start with Preset Positions
+
+Use these presets as starting points:
+
+| Archetype | Position | Best For |
+|-----------|----------|----------|
+| **Grassroots Organizer** | `{ x: -0.8, y: -0.6 }` | Community organizing, protests |
+| **Policy Reformer** | `{ x: 0.7, y: -0.5 }` | Lobbying, legislative campaigns |
+| **Cultural Activist** | `{ x: -0.7, y: 0.6 }` | Media campaigns, narrative change |
+| **Faith Leader** | `{ x: 0.6, y: 0.8 }` | Religious organizing, moral witness |
+| **Systems Thinker** | `{ x: 0.8, y: 0.0 }` | Economic leverage, institutional reform |
+| **Movement Builder** | `{ x: -0.5, y: 0.0 }` | Coalition building, base expansion |
+
+### 3. Adjust Based on Context
+
+Different campaigns may need different strategic lenses:
+
+```typescript
+// Issue-specific positioning
+const positions = {
+  housingJustice: { x: 0.2, y: -0.5 },  // Policy + organizing
+  climateAction: { x: -0.4, y: -0.4 },  // Grassroots + cultural
+  voterRights: { x: 0.6, y: -0.3 },     // Legal + systemic
+  faithCoalition: { x: 0.3, y: 0.7 }    // Spiritual + moral
+};
+
+const position = positions[campaignType];
+```
+
+### 4. Omit for Balanced Advice
+
+If you want generic advice that doesn't favor any theory, simply omit `x-theory-position`:
+
+```typescript
+// Balanced response (no strategic lens)
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'How do I organize?' }]
+  // No x-theory-position = balanced approach
+});
+```
+
+### 5. Experiment with Positions
+
+Try different positions for the same question to see how strategy changes:
+
+```typescript
+const question = "How can I win a housing justice campaign?";
+const positions = [
+  { x: -0.8, y: -0.6, label: "Grassroots" },
+  { x: 0.7, y: -0.5, label: "Policy" },
+  { x: -0.6, y: 0.4, label: "Cultural" },
+  { x: 0.0, y: 0.0, label: "Balanced" }
+];
+
+for (const pos of positions) {
+  const completion = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: question }],
+    // @ts-ignore
+    'x-theory-position': { x: pos.x, y: pos.y }
+  });
+
+  console.log(`\n=== ${pos.label} Approach ===`);
+  console.log(completion.choices[0].message.content);
+}
+```
+
+## Technical Implementation
+
+### How It Works
+
+When you set a Theory of Change position, Outcry AI:
+
+1. **Calculates theory blend** using bilinear interpolation:
+   ```
+   voluntarism = (1 - x) * (1 - y)
+   structuralism = x * (1 - y)
+   subjectivism = (1 - x) * y
+   theurgism = x * y
+   ```
+
+2. **Modifies system prompt** to inject strategic lens:
+   - Adds theory-specific reasoning steps
+   - Emphasizes relevant tactics and frameworks
+   - Includes theory-specific knowledge cards
+   - Appends strategic reminder
+
+3. **Generates response** using theory-aware context
+
+### Validation
+
+Coordinates must be valid floats between -1 and 1:
+
+```typescript
+function validateTheoryPosition(pos: { x: number; y: number }): boolean {
+  return (
+    typeof pos.x === 'number' &&
+    typeof pos.y === 'number' &&
+    pos.x >= -1 && pos.x <= 1 &&
+    pos.y >= -1 && pos.y <= 1
+  );
+}
+```
+
+Invalid positions return a 400 error:
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "x-theory-position coordinates must be between -1 and 1",
+    "param": "x-theory-position",
+    "code": "invalid_theory_position"
+  }
+}
+```
+
+## Theory Position in Video Generation
+
+Theory of Change also affects video prompt enhancement:
+
+```typescript
+const video = await client.videos.create({
+  model: 'sora-2',
+  prompt: 'Activists organizing for climate justice',
+  seconds: '8',
+  size: '1280x720',
+  // @ts-ignore
+  'x-theory-position': { x: -0.7, y: -0.5 }  // Grassroots lens
+});
+```
+
+**Effect**: The AI prompt enhancement will emphasize visuals aligned with your theory:
+- **Voluntarist**: Mass gatherings, protests, community meetings
+- **Structuralist**: Policy meetings, institutional settings, economic symbols
+- **Subjectivist**: Cultural expressions, art, media, consciousness
+- **Theurgist**: Faith gatherings, moral witness, spiritual symbols
+
+## Advanced: Multi-Conversation Strategy
+
+Use different theory positions across a conversation to explore strategic options:
+
+```typescript
+const strategies = [
+  { position: { x: -0.8, y: -0.6 }, label: "Grassroots" },
+  { position: { x: 0.7, y: -0.5 }, label: "Policy" },
+  { position: { x: -0.6, y: 0.5 }, label: "Cultural" }
+];
+
+// Phase 1: Explore each strategy
+for (const strategy of strategies) {
+  const completion = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [
+      { role: 'user', content: 'What are the pros and cons of this approach for housing justice?' }
+    ],
+    // @ts-ignore
+    'x-theory-position': strategy.position
+  });
+
+  console.log(`\n=== ${strategy.label} Analysis ===`);
+  console.log(completion.choices[0].message.content);
+}
+
+// Phase 2: Synthesize (balanced position)
+const synthesis = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'How can I combine grassroots organizing, policy reform, and cultural change into one campaign?' }
+  ]
+  // No position = balanced synthesis
+});
+
+console.log('\n=== Integrated Strategy ===');
+console.log(synthesis.choices[0].message.content);
+```
+
+## Further Reading
+
+- **APIPLAN.md**: Technical specification of Theory of Change implementation
+- **lib/ai/four-theories.ts**: Source code for theory calculations
+- **lib/ai/prompts-server.ts**: System prompt injection logic
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Chat API" icon="message" href="/api/chat">
+    Use Theory of Change in chat completions
+  </Card>
+
+  <Card title="Video API" icon="video" href="/api/videos">
+    Apply Theory of Change to video generation
+  </Card>
+
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Try Theory of Change in your first request
+  </Card>
+
+  <Card title="Examples" icon="code" href="/examples/theory-of-change">
+    See real-world Theory of Change examples
+  </Card>
+</CardGroup>

@@ -1,0 +1,641 @@
+# Streaming Chat Completions
+
+Get real-time token-by-token responses for better user experience.
+
+## Overview
+
+Streaming provides:
+- **Lower perceived latency** - Show progress immediately
+- **Better UX** - Users see responses as they're generated
+- **Progress indication** - Know the AI is working
+- **Cancellation** - Stop generation mid-stream
+
+## Basic Streaming
+
+Enable streaming with `stream: true`:
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [
+    { role: 'user', content: 'Explain civil disobedience' }
+  ],
+  stream: true
+});
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  process.stdout.write(content);
+}
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+stream = client.chat.completions.create(
+    model="grok-2",
+    messages=[
+        {"role": "user", "content": "Explain civil disobedience"}
+    ],
+    stream=True
+)
+
+for chunk in stream:
+    content = chunk.choices[0].delta.content or ""
+    print(content, end="")
+```
+
+```bash curl
+curl https://api.outcryai.com/v1/chat/completions \
+  -H "Authorization: Bearer oc_live_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "grok-2",
+    "messages": [
+      {"role": "user", "content": "Explain civil disobedience"}
+    ],
+    "stream": true
+  }'
+```
+
+</CodeGroup>
+
+## Stream Format
+
+Streaming uses Server-Sent Events (SSE) format:
+
+### Initial Chunk (Role)
+
+```json
+data: {
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion.chunk",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [{
+    "index": 0,
+    "delta": {
+      "role": "assistant",
+      "content": ""
+    },
+    "finish_reason": null
+  }]
+}
+```
+
+### Content Chunks
+
+```json
+data: {
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion.chunk",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [{
+    "index": 0,
+    "delta": {
+      "content": "Civil"
+    },
+    "finish_reason": null
+  }]
+}
+
+data: {
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion.chunk",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [{
+    "index": 0,
+    "delta": {
+      "content": " disobedience"
+    },
+    "finish_reason": null
+  }]
+}
+```
+
+### Final Chunk
+
+```json
+data: {
+  "id": "chatcmpl_abc123",
+  "object": "chat.completion.chunk",
+  "created": 1730634060,
+  "model": "grok-2",
+  "choices": [{
+    "index": 0,
+    "delta": {},
+    "finish_reason": "stop"
+  }]
+}
+
+data: [DONE]
+```
+
+## Advanced Patterns
+
+### Accumulate Full Response
+
+<CodeGroup>
+
+```typescript TypeScript
+let fullResponse = '';
+
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Explain activism' }],
+  stream: true
+});
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  fullResponse += content;
+  console.log(content);  // Show in real-time
+}
+
+console.log('\n\nFull response:', fullResponse);
+```
+
+```python Python
+full_response = ""
+
+stream = client.chat.completions.create(
+    model="grok-2",
+    messages=[{"role": "user", "content": "Explain activism"}],
+    stream=True
+)
+
+for chunk in stream:
+    content = chunk.choices[0].delta.content or ""
+    full_response += content
+    print(content, end="")
+
+print("\n\nFull response:", full_response)
+```
+
+</CodeGroup>
+
+### Error Handling
+
+<CodeGroup>
+
+```typescript TypeScript
+try {
+  const stream = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: 'Explain organizing' }],
+    stream: true
+  });
+
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content || '';
+    process.stdout.write(content);
+  }
+} catch (error) {
+  if (error.status === 429) {
+    console.error('Rate limit exceeded, retrying in 30 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    // Retry logic here
+  } else {
+    console.error('Stream error:', error);
+  }
+}
+```
+
+```python Python
+try:
+    stream = client.chat.completions.create(
+        model="grok-2",
+        messages=[{"role": "user", "content": "Explain organizing"}],
+        stream=True
+    )
+
+    for chunk in stream:
+        content = chunk.choices[0].delta.content or ""
+        print(content, end="")
+except Exception as error:
+    if hasattr(error, 'status') and error.status == 429:
+        print("Rate limit exceeded, retrying in 30 seconds...")
+        time.sleep(30)
+        # Retry logic here
+    else:
+        print(f"Stream error: {error}")
+```
+
+</CodeGroup>
+
+### Cancel Stream
+
+<CodeGroup>
+
+```typescript TypeScript
+const controller = new AbortController();
+
+// Cancel after 5 seconds
+setTimeout(() => controller.abort(), 5000);
+
+try {
+  const stream = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: 'Very long response...' }],
+    stream: true
+  }, {
+    signal: controller.signal
+  });
+
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content || '';
+    process.stdout.write(content);
+  }
+} catch (error) {
+  if (error.name === 'AbortError') {
+    console.log('\nStream cancelled by user');
+  }
+}
+```
+
+```python Python
+import signal
+import time
+
+def timeout_handler(signum, frame):
+    raise TimeoutError("Stream cancelled")
+
+signal.signal(signal.SIGALRM, timeout_handler)
+signal.alarm(5)  # Cancel after 5 seconds
+
+try:
+    stream = client.chat.completions.create(
+        model="grok-2",
+        messages=[{"role": "user", "content": "Very long response..."}],
+        stream=True
+    )
+
+    for chunk in stream:
+        content = chunk.choices[0].delta.content or ""
+        print(content, end="")
+except TimeoutError:
+    print("\nStream cancelled by user")
+finally:
+    signal.alarm(0)
+```
+
+</CodeGroup>
+
+### Update UI in Real-Time
+
+<CodeGroup>
+
+```typescript React
+'use client';
+
+import { useState } from 'react';
+import OpenAI from 'openai';
+
+export default function ChatComponent() {
+  const [response, setResponse] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(prompt: string) {
+    setLoading(true);
+    setResponse('');
+
+    const client = new OpenAI({
+      apiKey: process.env.NEXT_PUBLIC_OUTCRY_API_KEY,
+      baseURL: 'https://api.outcryai.com/v1',
+      dangerouslyAllowBrowser: true
+    });
+
+    const stream = await client.chat.completions.create({
+      model: 'grok-2',
+      messages: [{ role: 'user', content: prompt }],
+      stream: true
+    });
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      setResponse(prev => prev + content);
+    }
+
+    setLoading(false);
+  }
+
+  return (
+    <div>
+      <div className="response">{response}</div>
+      {loading && <div className="spinner">Generating...</div>}
+    </div>
+  );
+}
+```
+
+```typescript Express
+import express from 'express';
+import OpenAI from 'openai';
+
+const app = express();
+
+app.get('/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const client = new OpenAI({
+    apiKey: process.env.OUTCRY_API_KEY,
+    baseURL: 'https://api.outcryai.com/v1'
+  });
+
+  const stream = await client.chat.completions.create({
+    model: 'grok-2',
+    messages: [{ role: 'user', content: req.query.prompt }],
+    stream: true
+  });
+
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content || '';
+    res.write(`data: ${JSON.stringify({ content })}\n\n`);
+  }
+
+  res.write('data: [DONE]\n\n');
+  res.end();
+});
+```
+
+</CodeGroup>
+
+### Retry on Failure
+
+<CodeGroup>
+
+```typescript TypeScript
+async function streamWithRetry(
+  messages: any[],
+  maxRetries = 3
+): Promise<string> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      let fullResponse = '';
+
+      const stream = await client.chat.completions.create({
+        model: 'grok-2',
+        messages,
+        stream: true
+      });
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || '';
+        fullResponse += content;
+        process.stdout.write(content);
+      }
+
+      return fullResponse;
+    } catch (error) {
+      if (attempt === maxRetries - 1) throw error;
+
+      const delay = Math.pow(2, attempt) * 1000;
+      console.error(`\nRetrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Max retries exceeded');
+}
+```
+
+```python Python
+import time
+
+def stream_with_retry(messages, max_retries=3):
+    for attempt in range(max_retries):
+        try:
+            full_response = ""
+
+            stream = client.chat.completions.create(
+                model="grok-2",
+                messages=messages,
+                stream=True
+            )
+
+            for chunk in stream:
+                content = chunk.choices[0].delta.content or ""
+                full_response += content
+                print(content, end="")
+
+            return full_response
+        except Exception as error:
+            if attempt == max_retries - 1:
+                raise error
+
+            delay = (2 ** attempt) * 1000 / 1000
+            print(f"\nRetrying in {delay}s...")
+            time.sleep(delay)
+
+    raise Exception("Max retries exceeded")
+```
+
+</CodeGroup>
+
+## Performance Tips
+
+### 1. Use Streaming for Long Responses
+
+Streaming shows progress immediately, reducing perceived latency by **50-70%**.
+
+```typescript
+// ❌ Bad: User waits 10+ seconds for full response
+const completion = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Write a long essay on activism' }]
+});
+
+// ✅ Good: User sees tokens immediately
+const stream = await client.chat.completions.create({
+  model: 'grok-2',
+  messages: [{ role: 'user', content: 'Write a long essay on activism' }],
+  stream: true
+});
+```
+
+### 2. Buffer Chunks for Smoother UI
+
+Accumulate 2-3 tokens before updating UI:
+
+```typescript
+let buffer = '';
+let tokenCount = 0;
+
+for await (const chunk of stream) {
+  const content = chunk.choices[0]?.delta?.content || '';
+  buffer += content;
+  tokenCount++;
+
+  // Update UI every 3 tokens
+  if (tokenCount % 3 === 0) {
+    updateUI(buffer);
+    buffer = '';
+  }
+}
+
+// Flush remaining buffer
+if (buffer) updateUI(buffer);
+```
+
+### 3. Handle Connection Issues
+
+Implement exponential backoff for network failures:
+
+```typescript
+async function streamWithBackoff(messages: any[]) {
+  let retries = 0;
+  const maxRetries = 5;
+
+  while (retries < maxRetries) {
+    try {
+      const stream = await client.chat.completions.create({
+        model: 'grok-2',
+        messages,
+        stream: true
+      });
+
+      return stream;
+    } catch (error) {
+      if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+        const delay = Math.min(1000 * Math.pow(2, retries), 30000);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        retries++;
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+```
+
+## Pricing
+
+Streaming has the **same cost** as non-streaming:
+- **$0.08 per 1,000 tokens**
+
+The only difference is how tokens are delivered (all at once vs. real-time).
+
+## Rate Limits
+
+Streaming counts as a single request:
+
+| Tier | Requests per Minute | Tokens per Day |
+|------|---------------------|----------------|
+| Free | 10 | 10,000 |
+| Standard | 60 | 1,000,000 |
+| Premium | 300 | 10,000,000 |
+
+## Best Practices
+
+### 1. Always Use Streaming for Long Responses
+
+If the expected response is >200 tokens, use streaming for better UX.
+
+### 2. Handle Connection Drops
+
+Implement retry logic for network failures:
+
+```typescript
+const stream = await streamWithRetry(messages, 3);
+```
+
+### 3. Show Progress Indication
+
+Display a spinner or "Generating..." message while waiting for first chunk.
+
+### 4. Buffer Chunks for Smooth UI
+
+Update UI every 2-3 tokens, not every single token.
+
+### 5. Implement Cancellation
+
+Allow users to stop generation mid-stream:
+
+```typescript
+const controller = new AbortController();
+// Pass controller.signal to OpenAI call
+```
+
+## Common Issues
+
+### Issue: Stream Hangs Mid-Response
+
+**Solution:** Implement timeout and retry logic:
+
+```typescript
+const stream = await Promise.race([
+  client.chat.completions.create({
+    model: 'grok-2',
+    messages,
+    stream: true
+  }),
+  new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout')), 60000)
+  )
+]);
+```
+
+### Issue: Chunks Arrive Too Fast
+
+**Solution:** Buffer chunks before updating UI:
+
+```typescript
+const buffer = [];
+const BUFFER_SIZE = 3;
+
+for await (const chunk of stream) {
+  buffer.push(chunk.choices[0]?.delta?.content || '');
+
+  if (buffer.length >= BUFFER_SIZE) {
+    updateUI(buffer.join(''));
+    buffer.length = 0;
+  }
+}
+```
+
+### Issue: Connection Drops Mid-Stream
+
+**Solution:** Implement exponential backoff retry:
+
+```typescript
+await streamWithBackoff(messages);
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Completion" icon="message" href="/api/chat/create">
+    Learn about non-streaming completions
+  </Card>
+
+  <Card title="List Sessions" icon="list" href="/api/chat/list">
+    List chat sessions
+  </Card>
+
+  <Card title="Error Handling" icon="triangle-exclamation" href="/guides/error-handling">
+    Handle errors gracefully
+  </Card>
+
+  <Card title="Best Practices" icon="lightbulb" href="/guides/best-practices">
+    Learn best practices
+  </Card>
+</CardGroup>

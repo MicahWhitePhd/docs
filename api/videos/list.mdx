@@ -1,0 +1,441 @@
+# List Videos
+
+Retrieve a paginated list of your video generation jobs.
+
+```http
+GET /v1/videos
+```
+
+## Request
+
+### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `limit` | integer | No | 20 | Number of videos to return (1-100) |
+| `after` | string | No | - | Cursor for pagination (video ID) |
+
+### Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Bearer oc_live_...` | Yes |
+
+## Response
+
+### Success (200 OK)
+
+Returns a paginated list of videos:
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "video_xyz789",
+      "object": "video",
+      "created": 1730638000,
+      "model": "sora-2",
+      "prompt": "Climate rally at state capitol",
+      "status": "completed",
+      "progress": 100,
+      "seconds": "8",
+      "size": "1280x720",
+      "url": "https://pub-...r2.dev/videos/2025/11/xyz789.mp4"
+    },
+    {
+      "id": "video_abc123",
+      "object": "video",
+      "created": 1730634060,
+      "model": "sora-2-pro",
+      "prompt": "Activists marching",
+      "status": "in_progress",
+      "progress": 65,
+      "seconds": "12",
+      "size": "1792x1024",
+      "url": null
+    }
+  ],
+  "has_more": true,
+  "first_id": "video_xyz789",
+  "last_id": "video_abc123"
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `object` | string | Always `"list"` |
+| `data` | array | Array of video objects |
+| `has_more` | boolean | Whether more videos exist |
+| `first_id` | string | ID of first video in list |
+| `last_id` | string | ID of last video (use for pagination) |
+
+## Examples
+
+### List Recent Videos
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+const response = await client.videos.list({
+  limit: 10
+});
+
+console.log(`Total videos: ${response.data.length}`);
+
+for (const video of response.data) {
+  console.log(`[${video.id}] ${video.status} - "${video.prompt}"`);
+}
+
+if (response.has_more) {
+  console.log('More videos available...');
+}
+```
+
+```python Python
+from openai import OpenAI
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+response = client.videos.list(limit=10)
+
+print(f"Total videos: {len(response.data)}")
+
+for video in response.data:
+    print(f"[{video.id}] {video.status} - \"{video.prompt}\"")
+
+if response.has_more:
+    print("More videos available...")
+```
+
+```bash curl
+curl "https://api.outcryai.com/v1/videos?limit=10" \
+  -H "Authorization: Bearer oc_live_abc123def456..."
+```
+
+</CodeGroup>
+
+### Pagination
+
+Iterate through all videos using cursor-based pagination:
+
+```typescript
+async function getAllVideos(): Promise<Video[]> {
+  const allVideos: Video[] = [];
+  let after: string | undefined = undefined;
+
+  while (true) {
+    const response = await client.videos.list({
+      limit: 100,  // Max per page
+      after
+    });
+
+    allVideos.push(...response.data);
+
+    console.log(`Fetched ${response.data.length} videos...`);
+
+    if (!response.has_more) {
+      break;
+    }
+
+    // Use last video ID as cursor
+    after = response.last_id;
+  }
+
+  return allVideos;
+}
+
+const videos = await getAllVideos();
+console.log(`Total videos: ${videos.length}`);
+```
+
+### Filter by Status
+
+```typescript
+const response = await client.videos.list({ limit: 100 });
+
+const completed = response.data.filter(v => v.status === 'completed');
+const inProgress = response.data.filter(v => v.status === 'in_progress');
+const failed = response.data.filter(v => v.status === 'failed');
+
+console.log(`Completed: ${completed.length}`);
+console.log(`In Progress: ${inProgress.length}`);
+console.log(`Failed: ${failed.length}`);
+```
+
+### Get Latest Video
+
+```typescript
+const response = await client.videos.list({ limit: 1 });
+
+if (response.data.length > 0) {
+  const latest = response.data[0];
+  console.log(`Latest video: ${latest.id}`);
+  console.log(`Status: ${latest.status}`);
+} else {
+  console.log('No videos found');
+}
+```
+
+## Pagination Example
+
+Paginate through videos in chunks:
+
+```typescript
+async function paginateVideos(pageSize = 20) {
+  let after: string | undefined = undefined;
+  let page = 1;
+
+  while (true) {
+    console.log(`\n=== Page ${page} ===`);
+
+    const response = await client.videos.list({
+      limit: pageSize,
+      after
+    });
+
+    // Display videos
+    for (const video of response.data) {
+      const date = new Date(video.created * 1000).toLocaleString();
+      console.log(`${video.id} - ${video.status} - ${date}`);
+    }
+
+    if (!response.has_more) {
+      console.log('\n(End of list)');
+      break;
+    }
+
+    // Next page?
+    const continuePrompt = await askUser('Load next page? (y/n)');
+    if (continuePrompt !== 'y') {
+      break;
+    }
+
+    after = response.last_id;
+    page++;
+  }
+}
+
+await paginateVideos(20);
+```
+
+## Sorting
+
+Videos are returned in **reverse chronological order** (newest first):
+
+```typescript
+const response = await client.videos.list({ limit: 5 });
+
+// Videos are already sorted newest to oldest
+console.log('5 most recent videos:');
+for (const video of response.data) {
+  const date = new Date(video.created * 1000);
+  console.log(`${date.toISOString()} - ${video.id}`);
+}
+
+// Output:
+// 2025-11-04T12:30:00Z - video_newest
+// 2025-11-04T11:15:00Z - video_recent
+// 2025-11-03T22:00:00Z - video_older
+// 2025-11-03T18:45:00Z - video_oldest
+// 2025-11-02T09:00:00Z - video_ancient
+```
+
+## Statistics
+
+Calculate statistics across your videos:
+
+```typescript
+async function getVideoStats() {
+  const allVideos = await getAllVideos();
+
+  const stats = {
+    total: allVideos.length,
+    completed: allVideos.filter(v => v.status === 'completed').length,
+    inProgress: allVideos.filter(v => v.status === 'in_progress').length,
+    failed: allVideos.filter(v => v.status === 'failed').length,
+    totalCost: 0,
+    byModel: {
+      'sora-2': 0,
+      'sora-2-pro': 0
+    },
+    byDuration: {
+      '4': 0,
+      '8': 0,
+      '12': 0
+    }
+  };
+
+  for (const video of allVideos) {
+    // Sum costs
+    if (video['x-cost']) {
+      stats.totalCost += video['x-cost'].amount;
+    }
+
+    // Count by model
+    stats.byModel[video.model]++;
+
+    // Count by duration
+    stats.byDuration[video.seconds]++;
+  }
+
+  return stats;
+}
+
+const stats = await getVideoStats();
+console.log('Video Statistics:');
+console.log(`Total videos: ${stats.total}`);
+console.log(`Completed: ${stats.completed}`);
+console.log(`In progress: ${stats.inProgress}`);
+console.log(`Failed: ${stats.failed}`);
+console.log(`Total spent: $${stats.totalCost.toFixed(2)}`);
+console.log('By model:', stats.byModel);
+console.log('By duration:', stats.byDuration);
+```
+
+## Error Responses
+
+### 400 Bad Request - Invalid Limit
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "limit must be between 1 and 100",
+    "param": "limit",
+    "code": "invalid_limit"
+  }
+}
+```
+
+**Solution:** Use a limit between 1 and 100:
+
+```typescript
+// ❌ Bad
+const response = await client.videos.list({ limit: 500 });
+
+// ✅ Good
+const response = await client.videos.list({ limit: 100 });
+```
+
+### 400 Bad Request - Invalid Cursor
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Invalid after cursor: not_a_video_id",
+    "param": "after",
+    "code": "invalid_cursor"
+  }
+}
+```
+
+**Cause:** The `after` parameter must be a valid video ID from a previous response.
+
+**Solution:** Use the `last_id` field from the previous response:
+
+```typescript
+// ✅ Correct pagination
+const page1 = await client.videos.list({ limit: 20 });
+const page2 = await client.videos.list({
+  limit: 20,
+  after: page1.last_id  // Use last_id from previous response
+});
+```
+
+## Performance Considerations
+
+### Default Limit
+
+If you don't specify a `limit`, the default is **20 videos**:
+
+```typescript
+// These are equivalent:
+const response1 = await client.videos.list();
+const response2 = await client.videos.list({ limit: 20 });
+```
+
+### Optimal Page Size
+
+For best performance:
+
+- **UI pagination**: Use `limit: 10-20` for quick responses
+- **Batch processing**: Use `limit: 100` (maximum) to minimize requests
+- **Recent videos only**: Use `limit: 5-10` if you only need the latest
+
+```typescript
+// Quick dashboard view
+const recent = await client.videos.list({ limit: 5 });
+
+// Full export
+const all = await getAllVideos();  // Uses limit: 100 internally
+```
+
+### Caching
+
+Cache the video list to reduce API calls:
+
+```typescript
+let cachedVideos: Video[] = [];
+let cacheExpiry = 0;
+const CACHE_TTL = 60000;  // 1 minute
+
+async function getVideosCached(): Promise<Video[]> {
+  const now = Date.now();
+
+  if (now < cacheExpiry && cachedVideos.length > 0) {
+    console.log('Returning cached videos');
+    return cachedVideos;
+  }
+
+  console.log('Fetching fresh videos...');
+  const response = await client.videos.list({ limit: 20 });
+
+  cachedVideos = response.data;
+  cacheExpiry = now + CACHE_TTL;
+
+  return cachedVideos;
+}
+```
+
+## Required Scopes
+
+This endpoint requires the following API key scopes:
+
+- `video:read` - List videos
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Retrieve Video" icon="eye" href="/api/videos/retrieve">
+    Get details for a specific video
+  </Card>
+
+  <Card title="Create Video" icon="plus" href="/api/videos/create">
+    Generate a new video
+  </Card>
+
+  <Card title="Delete Video" icon="trash" href="/api/videos/delete">
+    Delete a video
+  </Card>
+
+  <Card title="Download Video" icon="download" href="/api/videos/download">
+    Download video files
+  </Card>
+</CardGroup>

@@ -1,0 +1,390 @@
+# Download Video
+
+Download or stream a completed video file.
+
+```http
+GET /v1/videos/:video_id/content
+```
+
+## Request
+
+### Path Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `video_id` | string | Yes | The video ID to download |
+
+### Headers
+
+| Header | Value | Required |
+|--------|-------|----------|
+| `Authorization` | `Bearer oc_live_...` | Yes |
+
+## Response
+
+### Success (302 Redirect)
+
+Redirects to the video file URL with caching headers:
+
+```http
+HTTP/1.1 302 Found
+Location: https://pub-...r2.dev/videos/2025/11/abc123.mp4
+Cache-Control: public, max-age=31536000
+```
+
+**The redirect location is:**
+- OpenAI URL (if <45 minutes old)
+- R2 CDN URL (if persisted to R2)
+
+### Video File
+
+The final response is an MP4 video file:
+
+```http
+HTTP/1.1 200 OK
+Content-Type: video/mp4
+Content-Length: 2847392
+Cache-Control: public, max-age=31536000
+
+[MP4 binary data]
+```
+
+## Examples
+
+### Download to File
+
+<CodeGroup>
+
+```typescript TypeScript
+import OpenAI from 'openai';
+import fs from 'fs';
+import https from 'https';
+
+const client = new OpenAI({
+  apiKey: process.env.OUTCRY_API_KEY,
+  baseURL: 'https://api.outcryai.com/v1'
+});
+
+async function downloadVideo(videoId: string, filepath: string) {
+  // Get video to check status
+  const video = await client.videos.retrieve(videoId);
+
+  if (video.status !== 'completed') {
+    throw new Error(`Video not ready: ${video.status}`);
+  }
+
+  // Download from URL
+  const file = fs.createWriteStream(filepath);
+
+  await new Promise((resolve, reject) => {
+    https.get(video.url, (response) => {
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve(true);
+      });
+    }).on('error', reject);
+  });
+
+  console.log(`Video saved to ${filepath}`);
+}
+
+await downloadVideo('video_abc123', './output.mp4');
+```
+
+```python Python
+from openai import OpenAI
+import requests
+import os
+
+client = OpenAI(
+    api_key=os.environ.get("OUTCRY_API_KEY"),
+    base_url="https://api.outcryai.com/v1"
+)
+
+def download_video(video_id: str, filepath: str):
+    # Get video to check status
+    video = client.videos.retrieve(video_id)
+
+    if video.status != 'completed':
+        raise Exception(f"Video not ready: {video.status}")
+
+    # Download from URL
+    response = requests.get(video.url)
+    response.raise_for_status()
+
+    with open(filepath, 'wb') as f:
+        f.write(response.content)
+
+    print(f"Video saved to {filepath}")
+
+download_video("video_abc123", "./output.mp4")
+```
+
+```bash curl
+# Download video to file
+curl -L https://api.outcryai.com/v1/videos/video_abc123/content \
+  -H "Authorization: Bearer oc_live_..." \
+  -o output.mp4
+
+# The -L flag follows the 302 redirect
+```
+
+</CodeGroup>
+
+### Stream to Browser
+
+```typescript
+// Next.js API route
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { videoId: string } }
+) {
+  const video = await client.videos.retrieve(params.videoId);
+
+  if (video.status !== 'completed') {
+    return NextResponse.json(
+      { error: 'Video not ready' },
+      { status: 404 }
+    );
+  }
+
+  // Redirect to video URL
+  return NextResponse.redirect(video.url, { status: 302 });
+}
+```
+
+```html
+<!-- HTML video player -->
+<video controls width="720">
+  <source src="/api/videos/video_abc123/stream" type="video/mp4">
+</video>
+```
+
+### Batch Download
+
+```typescript
+async function downloadAllVideos(outputDir: string) {
+  const response = await client.videos.list({ limit: 100 });
+  const completed = response.data.filter(v => v.status === 'completed');
+
+  console.log(`Downloading ${completed.length} videos...`);
+
+  for (const video of completed) {
+    const filename = `${video.id}.mp4`;
+    const filepath = `${outputDir}/${filename}`;
+
+    try {
+      await downloadVideo(video.id, filepath);
+      console.log(`✓ ${filename}`);
+    } catch (error: any) {
+      console.error(`✗ ${filename}: ${error.message}`);
+    }
+  }
+}
+
+await downloadAllVideos('./videos');
+```
+
+### Progress Tracking
+
+```typescript
+import axios from 'axios';
+
+async function downloadWithProgress(
+  videoId: string,
+  filepath: string,
+  onProgress: (percent: number) => void
+) {
+  const video = await client.videos.retrieve(videoId);
+
+  const response = await axios({
+    method: 'get',
+    url: video.url,
+    responseType: 'stream',
+    onDownloadProgress: (progressEvent) => {
+      const total = progressEvent.total || 0;
+      const current = progressEvent.loaded;
+      const percent = Math.round((current / total) * 100);
+      onProgress(percent);
+    }
+  });
+
+  const writer = fs.createWriteStream(filepath);
+  response.data.pipe(writer);
+
+  return new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
+}
+
+await downloadWithProgress(
+  'video_abc123',
+  './output.mp4',
+  (percent) => console.log(`Download progress: ${percent}%`)
+);
+```
+
+## Error Responses
+
+### 404 Not Found
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Video not found: video_abc123",
+    "code": "video_not_found"
+  }
+}
+```
+
+### 410 Gone - Video Expired
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Video has expired (>1 hour old, not persisted)",
+    "code": "video_expired"
+  }
+}
+```
+
+**Cause:** Video is >1 hour old and was not persisted to R2.
+
+**Solution:**
+- Videos are automatically persisted after 45 minutes
+- This error is rare (only for very old unpersisted videos)
+- Create a new video instead
+
+### 422 Unprocessable Entity - Not Completed
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "message": "Video is not completed yet: status=in_progress",
+    "code": "video_not_ready"
+  }
+}
+```
+
+**Solution:** Wait for video to complete before downloading:
+
+```typescript
+async function downloadWhenReady(videoId: string, filepath: string) {
+  // Wait for completion
+  let video = await client.videos.retrieve(videoId);
+
+  while (video.status === 'queued' || video.status === 'in_progress') {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    video = await client.videos.retrieve(videoId);
+  }
+
+  if (video.status !== 'completed') {
+    throw new Error(`Video failed: ${video.error.message}`);
+  }
+
+  // Download
+  await downloadVideo(videoId, filepath);
+}
+```
+
+## Storage Providers
+
+### OpenAI Storage (0-45 minutes)
+
+Videos initially served from OpenAI:
+
+```
+https://api.openai.com/v1/files/file_abc123/content
+```
+
+**Characteristics:**
+- Fast access
+- 1 hour retention
+- Requires OpenAI auth
+
+### R2 Storage (45 minutes+)
+
+Videos persisted to Cloudflare R2:
+
+```
+https://pub-abc123.r2.dev/videos/2025/11/abc123.mp4
+```
+
+**Characteristics:**
+- CDN-backed (global edge caching)
+- Permanent storage
+- Public URLs (no auth required for download)
+
+<Info>
+  The download endpoint automatically serves from the correct storage provider. Your application doesn't need to handle the transition.
+</Info>
+
+## Caching
+
+Video URLs include cache headers for efficient delivery:
+
+```http
+Cache-Control: public, max-age=31536000
+```
+
+This tells browsers and CDNs to cache the video for 1 year (videos are immutable).
+
+### Client-Side Caching
+
+```typescript
+// Cache video URL in localStorage
+function cacheVideoUrl(videoId: string, url: string) {
+  localStorage.setItem(`video_${videoId}`, url);
+}
+
+function getCachedVideoUrl(videoId: string): string | null {
+  return localStorage.getItem(`video_${videoId}`);
+}
+
+// Check cache first
+let url = getCachedVideoUrl('video_abc123');
+
+if (!url) {
+  const video = await client.videos.retrieve('video_abc123');
+  url = video.url;
+  cacheVideoUrl('video_abc123', url);
+}
+
+// Use cached URL
+playVideo(url);
+```
+
+## Required Scopes
+
+This endpoint requires the following API key scopes:
+
+- `video:read` - Download videos
+
+See the [Authentication Guide](/guides/authentication#api-key-scopes) for more details.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Video" icon="plus" href="/api/videos/create">
+    Generate a new video
+  </Card>
+
+  <Card title="Retrieve Video" icon="eye" href="/api/videos/retrieve">
+    Check if video is ready
+  </Card>
+
+  <Card title="List Videos" icon="list" href="/api/videos/list">
+    List all your videos
+  </Card>
+
+  <Card title="Remix Video" icon="wand-magic-sparkles" href="/api/videos/remix">
+    Create a remix from existing video
+  </Card>
+</CardGroup>
